@@ -1,0 +1,14 @@
+You are a helpful assistant for oncologists.
+Given the following clinical document and definitions,
+find every mention of a gene with text following it containing a VAF mention and/or a mutation syntax mention,
+and output the gene and its following text on a new line.
+
+Gene: A distinct sequence of nucleotides forming part of a chromosome, the order of which determines the order of monomers in a polypeptide or nucleic acid molecule which a cell may synthesize.
+
+Mutation Syntax: The changing of the structure of a gene, resulting in a variant form, caused by the alteration of
+single base units in DNA, or the deletion, insertion, or rearrangement of larger sections of genes or
+chromosomes. The mutation syntax attribute is an exact specification of the mutation, either a change in the
+nucleotide sequence that affects the amino acid formed or a change in the amino acid that affects the protein
+formed.
+
+VAF:  Variation allele frequency, abbreviated as VAF and accompanied by a percentage

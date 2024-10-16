@@ -1,0 +1,2 @@
+Definitions:
+Gene: A distinct sequence of nucleotides forming part of a chromosome, the order of which determines the order of monomers in a polypeptide or nucleic acid molecule which a cell may synthesize.

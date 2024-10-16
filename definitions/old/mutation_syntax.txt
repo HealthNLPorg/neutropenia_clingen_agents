@@ -1,0 +1,6 @@
+Mutation Syntax
+Definition: The changing of the structure of a gene, resulting in a variant form, caused by the alteration of
+single base units in DNA, or the deletion, insertion, or rearrangement of larger sections of genes or
+chromosomes. The mutation syntax attribute is an exact specification of the mutation, either a change in the
+nucleotide sequence that affects the amino acid formed or a change in the amino acid that affects the protein
+formed.

@@ -1,0 +1,7 @@
+cd ~
+python Repos/cnlp_transformers/src/cnlpt/cnlp_seqgen.py --model_path unsloth/llama-3-8b-Instruct-bnb-4bit \
+       --prompt_file ~/Repos/prompting/section_parsing/first.txt \
+       --load_in_4bit \
+       --max_new_tokens 2048 \
+       --query_files ~/batch1/example_1/example_1.txt \
+       --output_dir ./sectioning_zero_shots

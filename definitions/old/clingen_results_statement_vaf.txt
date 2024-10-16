@@ -1,0 +1,4 @@
+Clinical genomics results statement:
+A clinical genomics results statement consists of one or more attributes and values that together provide the most basic information necessary to interpret the results of a clinical genomic test, for instance indication of variation allele frequency (VAF) and its percentage.
+Statements may be of a variety of types based on the test performed, containing different entities and interpretations based on statement type.
+The statement types to be annotated are described in more detail below.
