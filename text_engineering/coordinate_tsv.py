@@ -1,5 +1,6 @@
 import argparse
 import pickle
+import re
 from itertools import takewhile
 from typing import Literal
 
@@ -51,6 +52,9 @@ def complete_frame(frame_n: str, pickle_n: str, corpus: CORPUS) -> pd.DataFrame:
     frame["filename"] = frame.apply(get_original_filename, axis=1)
     frame["CORPUS"] = corpus
 
+    def clean_diagnosis(diagnosis: str) -> str:
+        return re.sub("\\s+", " ", diagnosis).strip()
+
     for pt_column in pt_columns:
 
         def get_column_attr(row: pd.Series) -> str | float | int | pd.Timestamp:
@@ -63,7 +67,10 @@ def complete_frame(frame_n: str, pickle_n: str, corpus: CORPUS) -> pd.DataFrame:
                 raise Exception(
                     f"Missing Table Entry for mrn {row.MRN} from filename {row.filename} in:\n\n{mrns}"
                 )
-            return PT_info.get(pt_column, nan)
+            _column_info = PT_info.get(pt_column, nan)
+            if pt_column == "Diagnosis":
+                return clean_diagnosis(_column_info)
+            return _column_info
 
         frame[pt_column] = frame.apply(get_column_attr, axis=1)
     return frame
