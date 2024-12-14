@@ -1,5 +1,5 @@
 import argparse
-import datetime
+import json
 import logging
 import os
 import pathlib
@@ -7,15 +7,12 @@ import re
 from itertools import chain
 from time import time
 from typing import Callable, Dict, Iterable, List, Tuple, cast
-import torch
 
 import pandas as pd
-import pytz
 from datasets import Dataset, load_dataset
-from tqdm import tqdm
-from transformers import AutoTokenizer, BitsAndBytesConfig, pipeline
-from transformers.pipelines.pt_utils import KeyDataset
-from multiprocess import set_start_method
+from transformers import pipeline
+
+# from transformers.pipelines.pt_utils import KeyDataset
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument(
@@ -96,9 +93,9 @@ def main() -> None:
     else:
         final_path = args.model_path
     logger.info(f"Loading tokenizer and model for model name {final_path}")
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=args.load_in_4bit, load_in_8bit=args.load_in_8bit
-    )
+    # quantization_config = BitsAndBytesConfig(
+    #     load_in_4bit=args.load_in_4bit, load_in_8bit=args.load_in_8bit
+    # )
     system_prompt = get_system_prompt(args.prompt_file)
     logger.info("Building dataset")
     query_dataset = load_dataset(
@@ -148,15 +145,16 @@ def main() -> None:
     )
     end = time()
     logger.info(f"Loading model took {end-start} seconds")
-    current_time = datetime.datetime.now(pytz.timezone("America/New_York"))
+    # current_time = datetime.datetime.now(pytz.timezone("America/New_York"))
     out_dir = args.output_dir
     out_fn_stem = pathlib.Path(
-        args.query_dir if args.query_dir else args_query_file
+        args.query_dir if args.query_dir else args.query_file
     ).stem
-    out_fn = f"{out_fn_stem}.txt"
+    # out_fn = f"{out_fn_stem}.txt"
+    out_fn = f"{out_fn_stem}.xlsx"
     out_path = os.path.join(out_dir, out_fn)
 
-    def format_chat(sentence: Dict[str, str]) -> Dict[str, str]:
+    def format_chat(sample: dict) -> dict:
         return {
             "text": seqgen_pipe.tokenizer.apply_chat_template(
                 get_prompt(system_prompt, sample["sentence"]),
@@ -181,27 +179,37 @@ def main() -> None:
         # num_proc=torch.cuda.device_count(),
     )
     logger.info(f"{query_dataset} inference finished")
+    query_dataset.map(parse_output)
+    query_dataset.filter(non_empty_json)
+    query_dataset.filter(gene_non_hallucinatory)
+    query_dataset.filter(attributes_non_empty)
+    query_dataframe = query_dataset.to_pandas()
+    query_dataframe.to_excel(out_path)
 
 
 def try_json(s: str) -> dict:
     try:
-        d = json.loads(s)
-    except:
-        d = {}
-    return d
+        return json.loads(s)
+    except Exception:
+        return {}
+
+
+def non_empty_json(sample: dict) -> bool:
+    return len(sample["json_output"]) > 0
+
 
 def parse_output(sample: dict) -> dict:
     sample["json_output"] = try_json(sample["output"])
     return sample
 
-def non_hallucinatory(sample: dict) -> bool:
-    try:
-        return (
-            type(sample["GENE"]) == str
-            and "".join(sample["GENE"]).lower() in s["sentence"].lower()
-        )
-    except:
-        raise Exception(f"{s.GENE} {s.sentence}")
+
+def gene_non_hallucinatory(sample: dict) -> bool:
+    gene = sample["json_output"].get("GENE")
+    return gene is not None and gene.lower() in sample["sentence"].lower()
+
+
+def attributes_non_empty(sample: dict) -> bool:
+    return len({"STATEMENT", "SYNTAX_N", "SYNTAX_P"} & sample["json_output"].keys()) > 0
 
 
 def empty_prompt(system_prompt: str, query: str) -> List[Message]:
