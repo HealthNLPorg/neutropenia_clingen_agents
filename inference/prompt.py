@@ -148,11 +148,15 @@ def main() -> None:
     # current_time = datetime.datetime.now(pytz.timezone("America/New_York"))
     out_dir = args.output_dir
     out_fn_stem = pathlib.Path(
-        args.query_dir if args.query_dir else args.query_file
+        args.query_dir
+        if args.query_dir
+        else "_".join(basename_no_ext(fn) for fn in args.query_files)
     ).stem
     # out_fn = f"{out_fn_stem}.txt"
-    out_fn = f"{out_fn_stem}.xlsx"
-    out_path = os.path.join(out_dir, out_fn)
+    excel_out_fn = f"{out_fn_stem}.xlsx"
+    excel_out_path = os.path.join(out_dir, excel_out_fn)
+    tsv_out_fn = f"{out_fn_stem}.tsv"
+    tsv_out_path = os.path.join(out_dir, tsv_out_fn)
 
     def format_chat(sample: dict) -> dict:
         return {
@@ -179,12 +183,13 @@ def main() -> None:
         # num_proc=torch.cuda.device_count(),
     )
     logger.info(f"{query_dataset} inference finished")
-    query_dataset.map(parse_output)
-    query_dataset.filter(non_empty_json)
-    query_dataset.filter(gene_non_hallucinatory)
-    query_dataset.filter(attributes_non_empty)
+    query_dataset = query_dataset.map(parse_output)
+    query_dataset = query_dataset.filter(non_empty_json)
+    query_dataset = query_dataset.filter(gene_non_hallucinatory)
+    query_dataset = query_dataset.filter(attributes_non_empty)
     query_dataframe = query_dataset.to_pandas()
-    query_dataframe.to_excel(out_path)
+    query_dataframe.to_excel(excel_out_path)
+    query_dataframe.to_csv(tsv_out_path, sep="\t")
 
 
 def try_json(s: str) -> dict:
@@ -199,13 +204,17 @@ def non_empty_json(sample: dict) -> bool:
 
 
 def parse_output(sample: dict) -> dict:
-    sample["json_output"] = try_json(sample["output"])
+    model_answer = sample["output"][0]["generated_text"].split("assistant")[-1].strip()
+    sample["json_output"] = try_json(model_answer)
     return sample
 
 
 def gene_non_hallucinatory(sample: dict) -> bool:
     gene = sample["json_output"].get("GENE")
-    return gene is not None and gene.lower() in sample["sentence"].lower()
+    try:
+        return gene is not None and gene.lower() in sample["sentence"].lower()
+    except Exception:
+        print(gene)
 
 
 def attributes_non_empty(sample: dict) -> bool:
