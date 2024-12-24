@@ -203,8 +203,8 @@ def main() -> None:
     query_dataset = (
         query_dataset.map(parse_output)
         .filter(non_empty_json)
-        .filter(gene_non_hallucinatory)
-        .filter(attributes_non_empty)
+        .filter(non_hallucinatory_gene)
+        .filter(non_empty_attributes)
     )
     query_dataframe = query_dataset.to_pandas()
     query_dataframe.to_excel(excel_out_path)
@@ -259,7 +259,7 @@ def parse_output(sample: dict) -> dict:
     return sample
 
 
-def gene_non_hallucinatory(sample: dict) -> bool:
+def non_hallucinatory_gene(sample: dict) -> bool:
     gene = sample["json_output"].get("GENE")
     try:
         return gene is not None and gene.lower() in sample["sentence"].lower()
@@ -268,7 +268,7 @@ def gene_non_hallucinatory(sample: dict) -> bool:
         return False
 
 
-def attributes_non_empty(sample: dict) -> bool:
+def non_empty_attributes(sample: dict) -> bool:
     return len({"STATEMENT", "SYNTAX_N", "SYNTAX_P"} & sample["json_output"].keys()) > 0
 
 
