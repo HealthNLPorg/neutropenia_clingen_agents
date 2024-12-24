@@ -183,13 +183,46 @@ def main() -> None:
         # num_proc=torch.cuda.device_count(),
     )
     logger.info(f"{query_dataset} inference finished")
-    query_dataset = query_dataset.map(parse_output)
-    query_dataset = query_dataset.filter(non_empty_json)
-    query_dataset = query_dataset.filter(gene_non_hallucinatory)
-    query_dataset = query_dataset.filter(attributes_non_empty)
+    query_dataset = (
+        query_dataset.map(parse_output)
+        .filter(non_empty_json)
+        .filter(gene_non_hallucinatory)
+        .filter(attributes_non_empty)
+    )
     query_dataframe = query_dataset.to_pandas()
     query_dataframe.to_excel(excel_out_path)
     query_dataframe.to_csv(tsv_out_path, sep="\t")
+
+
+def get_pipeline(final_path: str, device_index: int):
+    # pipeline(
+    #         "text-generation",
+    #         model=final_path,
+    #         # use_auth_token=True,
+    #         device_map="auto",
+    #         model_kwargs={"load_in_4bit": True},
+    #         max_new_tokens=args.max_new_tokens,
+    #         batch_size=32,
+    #     )
+
+    logger.info(f"Creating pipeline for device: {device_index}")
+    tokenizer = AutoTokenizer.from_pretrained(final_path)
+    device = torch.device(
+        f"cuda:{device_index}" if torch.cuda.is_available() else "cpu"
+    )
+    model = AutoModel.from_pretrained(final_path).to(device)
+    pipe = pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        # truncation=True,
+        # padding=True,
+        # pad_to_max_length=True,
+        device=device,
+        framework="pt",
+        # batch_size=16,
+    )
+    return pipe
 
 
 def try_json(s: str) -> dict:
