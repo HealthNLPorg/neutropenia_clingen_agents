@@ -13,6 +13,8 @@ from typing import Callable, Dict, Iterable, List, Tuple, cast
 import pandas as pd
 import torch
 from datasets import Dataset, concatenate_datasets, load_dataset
+from torch.utils.data import Dataset as TorchDataset
+
 from transformers import AutoModel, AutoTokenizer, pipeline
 
 # from transformers.pipelines.pt_utils import KeyDataset
@@ -93,18 +95,18 @@ logging.basicConfig(
 )
 
 
-class PooledDataset(Dataset):
-    def __init__(self, device_index: int, world_size: int, original_dataset) -> None:
-        super().__init__()
-        self.device_index = device_index
-        self.data = original_dataset[device_index::world_size]
-        logger.info(self.data)
+# class PooledDataset(TorchDataset):
+#     def __init__(self, device_index: int, world_size: int, original_dataset) -> None:
+#         super().__init__()
+#         self.device_index = device_index
+#         self.data = original_dataset[device_index::world_size]
+#         logger.info(self.data)
 
-    def __len__(self) -> int:
-        return len(self.data)
+#     def __len__(self) -> int:
+#         return len(self.data)
 
-    def __getitem__(self, i):
-        return self.data[i]
+#     def __getitem__(self, i):
+#         return self.data[i]
 
 
 def main() -> None:
@@ -168,35 +170,12 @@ def main() -> None:
     tsv_out_fn = f"{out_fn_stem}.tsv"
     tsv_out_path = os.path.join(out_dir, tsv_out_fn)
 
-    def format_chat(sample: dict, tokenizer) -> dict:
-        return {
-            "text": tokenizer.apply_chat_template(
-                get_prompt(system_prompt, sample["sentence"]),
-                tokenize=False,
-                add_generation_prompt=False,
-            )
-        }
-
     pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-    query_dataset = query_dataset.map(format_chat)
 
-    def _text_generation_on_pool(arg: tuple[int, int]):
-        device_index, world_size = arg
-        start = time()
-        pipe = get_pipeline(final_path, device_index)
-        end = time()
-        logger.info(f"Loading model took {end-start} seconds")
-
-        local_query_dataset_pool = PooledDataset(
-            device_index, world_size, query_dataset
-        )
-        local_query_dataset_pool.map(partial(format_chat, tokenizer=pipe.tokenizer))
-
-        for out in pipe(local_query_dataset_pool):
-            local_query_dataset_pool["output"] = out
-        return local_query_dataset_pool
-
-    pools = ((i, args.gpu_pool_size) for i in range(args.gpu_pool_size))
+    pools = (
+        (i, args.gpu_pool_size, final_path, query_dataset)
+        for i in range(args.gpu_pool_size)
+    )
     with Pool(args.gpu_pool_size) as p:
         finished_pools = p.map(_text_generation_on_pool, pools)
     query_dataset = concatenate_datasets(finished_pools)
@@ -211,6 +190,31 @@ def main() -> None:
     query_dataframe.to_csv(tsv_out_path, sep="\t")
 
 
+def format_chat(sample: dict, tokenizer) -> dict:
+    return {
+        "text": tokenizer.apply_chat_template(
+            get_prompt(system_prompt, sample["sentence"]),
+            tokenize=False,
+            add_generation_prompt=False,
+        )
+    }
+
+
+def _text_generation_on_pool(arg):
+    device_index, world_size, final_path, query_dataset = arg
+    start = time()
+    pipe = get_pipeline(final_path, device_index)
+    end = time()
+    logger.info(f"Loading model took {end-start} seconds")
+
+    local_query_dataset_pool = query_dataset[device_index::world_size] # PooledDataset(device_index, world_size, query_dataset)
+    local_query_dataset_pool.map(partial(format_chat, tokenizer=pipe.tokenizer))
+
+    for out in pipe(local_query_dataset_pool):
+        local_query_dataset_pool["output"] = out
+    return local_query_dataset_pool
+
+
 def get_pipeline(final_path: str, device_index: int):
     # pipeline(
     #         "text-generation",
@@ -223,19 +227,22 @@ def get_pipeline(final_path: str, device_index: int):
     #     )
 
     logger.info(f"Creating pipeline for device: {device_index}")
-    tokenizer = AutoTokenizer.from_pretrained(final_path)
+    # tokenizer = AutoTokenizer.from_pretrained(final_path)
     device = torch.device(
         f"cuda:{device_index}" if torch.cuda.is_available() else "cpu"
     )
-    model = AutoModel.from_pretrained(final_path).to(device)
+    # model = AutoModel.from_pretrained(final_path).to(device)
     pipe = pipeline(
         "text-generation",
-        model=model,
-        tokenizer=tokenizer,
+        # model=model,
+        # tokenizer=tokenizer,
         # truncation=True,
         # padding=True,
         # pad_to_max_length=True,
-        device=device,
+        model=final_path,
+        model_kwargs={"load_in_4bit": True},
+        # device=device,
+        device_map="auto",
         framework="pt",
         # batch_size=16,
     )
