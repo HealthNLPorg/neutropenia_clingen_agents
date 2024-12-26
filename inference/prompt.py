@@ -175,21 +175,24 @@ def main() -> None:
     query_dataset = query_dataset.map(format_chat)
     logger.info(f"Processed dataset for {query_dataset}")
     logger.info(f"Starting model inference on {query_dataset}")
-    query_dataset = query_dataset.map(
-        predict,
-        batched=True,
-        batch_size=32,
-        # with_rank=True,
-        # num_proc=torch.cuda.device_count(),
+    query_dataset = (
+        query_dataset.map(
+            predict,
+            batched=True,
+            batch_size=8,
+            # with_rank=True,
+            # num_proc=torch.cuda.device_count(),
+        )
+        .map(parse_output)
+        .filter(non_empty_json)
+        .filter(gene_non_hallucinatory)
+        .filter(attributes_non_empty)
+        .map(insert_mentions)
+        .remove_columns(["text", "output", "json_output"])
     )
-    logger.info(f"{query_dataset} inference finished")
-    query_dataset = query_dataset.map(parse_output)
-    query_dataset = query_dataset.filter(non_empty_json)
-    query_dataset = query_dataset.filter(gene_non_hallucinatory)
-    query_dataset = query_dataset.filter(attributes_non_empty)
     query_dataframe = query_dataset.to_pandas()
-    query_dataframe.to_excel(excel_out_path)
-    query_dataframe.to_csv(tsv_out_path, sep="\t")
+    query_dataframe.to_excel(excel_out_path, index=False)
+    query_dataframe.to_csv(tsv_out_path, sep="\t", index=False)
 
 
 def try_json(s: str) -> dict:
@@ -205,20 +208,36 @@ def non_empty_json(sample: dict) -> bool:
 
 def parse_output(sample: dict) -> dict:
     model_answer = sample["output"][0]["generated_text"].split("assistant")[-1].strip()
-    sample["json_output"] = try_json(model_answer)
+    sample["json_output"] = json.dumps(try_json(model_answer))
     return sample
 
 
 def gene_non_hallucinatory(sample: dict) -> bool:
-    gene = sample["json_output"].get("GENE")
+    gene = json.loads(sample["json_output"]).get("GENE")
     try:
-        return gene is not None and gene.lower() in sample["sentence"].lower()
+        return gene is not None and "".join(gene).lower() in sample["sentence"].lower()
     except Exception:
-        print(gene)
+        return False
+
+
+def insert_mentions(sample: dict) -> dict:
+    mention_components = {"GENE", "STATEMENT", "SYNTAX_N", "SYNTAX_P", "VUS"}
+    components_dict = json.loads(sample["json_output"])
+    for mention_component in mention_components:
+        sample[mention_component] = "".join(
+            components_dict.get(mention_component, "__UNK__")
+        )
+    return sample
 
 
 def attributes_non_empty(sample: dict) -> bool:
-    return len({"STATEMENT", "SYNTAX_N", "SYNTAX_P"} & sample["json_output"].keys()) > 0
+    return (
+        len(
+            {"STATEMENT", "SYNTAX_N", "SYNTAX_P", "VUS"}
+            & json.loads(sample["json_output"]).keys()
+        )
+        > 0
+    )
 
 
 def empty_prompt(system_prompt: str, query: str) -> List[Message]:
