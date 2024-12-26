@@ -7,13 +7,10 @@ import re
 from itertools import chain
 from time import time
 from typing import Callable, Dict, Iterable, List, Tuple, cast
-from tqdm import tqdm
 
 import pandas as pd
 from datasets import Dataset, load_dataset
-from transformers import pipeline, BitsAndBytesConfig
-
-# from transformers.pipelines.pt_utils import KeyDataset
+from transformers import pipeline
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument(
@@ -137,27 +134,19 @@ def main() -> None:
     seqgen_pipe = pipeline(
         "text-generation",
         model=final_path,
-        # use_auth_token=True,
         device_map="auto",
         max_new_tokens=args.max_new_tokens,
-        # quantization_config=quantization_config,
     )
     end = time()
     logger.info(f"Loading model took {end-start} seconds")
-    # current_time = datetime.datetime.now(pytz.timezone("America/New_York"))
     out_dir = args.output_dir
     out_fn_stem = pathlib.Path(
         args.query_dir
         if args.query_dir
         else "_".join(basename_no_ext(fn) for fn in args.query_files)
     ).stem
-    # out_fn = f"{out_fn_stem}.txt"
-    excel_out_fn = f"{out_fn_stem}.xlsx"
-    excel_out_path = os.path.join(out_dir, excel_out_fn)
     tsv_out_fn = f"{out_fn_stem}.tsv"
     tsv_out_path = os.path.join(out_dir, tsv_out_fn)
-    output_backup_tsv_out_fn = f"RAW_OUTPUT_BACKUP_{out_fn_stem}.tsv"
-    output_backup_tsv_out_path = os.path.join(out_dir, output_backup_tsv_out_fn)
 
     def format_chat(sample: dict) -> dict:
         return {
@@ -174,25 +163,9 @@ def main() -> None:
         batch["output"] = seqgen_pipe(batch["text"])
         return batch
 
-    # pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-    # query_dataset = query_dataset.map(format_chat)
-    # start = time()
-    # out_ls = []
-    # for out in seqgen_pipe(query_dataset["text"], batch_size=8)
-    # query_dataset = query_dataset.add_column(
-    #     "output", out_ls
-    # )
-    # query_dataset.to_csv(output_backup_tsv_out_path, sep="\t", index=False)
-    # end = time()
-    # logger.info(f"Main processing took {end-start} seconds")
     query_dataset = (
-        query_dataset
-        .map(format_chat)
-        .map(
-            predict,
-            batched=True,
-            batch_size=128
-        )
+        query_dataset.map(format_chat)
+        .map(predict, batched=True, batch_size=128)
         .map(parse_output)
         .filter(non_empty_json)
         .filter(gene_non_hallucinatory)
@@ -217,7 +190,6 @@ def main() -> None:
             "Filename",
         ]
     ]
-    query_dataframe.to_excel(excel_out_path, index=False)
     query_dataframe.to_csv(tsv_out_path, sep="\t", index=False)
 
 
