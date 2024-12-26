@@ -7,10 +7,11 @@ import re
 from itertools import chain
 from time import time
 from typing import Callable, Dict, Iterable, List, Tuple, cast
+from tqdm import tqdm
 
 import pandas as pd
 from datasets import Dataset, load_dataset
-from transformers import pipeline
+from transformers import pipeline, BitsAndBytesConfig
 
 # from transformers.pipelines.pt_utils import KeyDataset
 
@@ -104,7 +105,6 @@ def main() -> None:
         data_files=os.listdir(args.query_dir) if args.query_dir else args.query_files,
     )
     query_dataset = query_dataset["train"]
-    logger.info(f"OVER HERE {query_dataset}")
 
     def few_shot_with_examples(
         examples: Iterable[Tuple[str, str]]
@@ -139,9 +139,8 @@ def main() -> None:
         model=final_path,
         # use_auth_token=True,
         device_map="auto",
-        model_kwargs={"load_in_4bit": True},
         max_new_tokens=args.max_new_tokens,
-        batch_size=32,
+        # quantization_config=quantization_config,
     )
     end = time()
     logger.info(f"Loading model took {end-start} seconds")
@@ -157,6 +156,8 @@ def main() -> None:
     excel_out_path = os.path.join(out_dir, excel_out_fn)
     tsv_out_fn = f"{out_fn_stem}.tsv"
     tsv_out_path = os.path.join(out_dir, tsv_out_fn)
+    output_backup_tsv_out_fn = f"RAW_OUTPUT_BACKUP_{out_fn_stem}.tsv"
+    output_backup_tsv_out_path = os.path.join(out_dir, output_backup_tsv_out_fn)
 
     def format_chat(sample: dict) -> dict:
         return {
@@ -164,6 +165,8 @@ def main() -> None:
                 get_prompt(system_prompt, sample["sentence"]),
                 tokenize=False,
                 add_generation_prompt=False,
+                truncate=True,
+                max_length=8_000,
             )
         }
 
@@ -171,26 +174,49 @@ def main() -> None:
         batch["output"] = seqgen_pipe(batch["text"])
         return batch
 
-    pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-    query_dataset = query_dataset.map(format_chat)
-    logger.info(f"Processed dataset for {query_dataset}")
-    logger.info(f"Starting model inference on {query_dataset}")
+    # pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+    # query_dataset = query_dataset.map(format_chat)
+    # start = time()
+    # out_ls = []
+    # for out in seqgen_pipe(query_dataset["text"], batch_size=8)
+    # query_dataset = query_dataset.add_column(
+    #     "output", out_ls
+    # )
+    # query_dataset.to_csv(output_backup_tsv_out_path, sep="\t", index=False)
+    # end = time()
+    # logger.info(f"Main processing took {end-start} seconds")
     query_dataset = (
-        query_dataset.map(
+        query_dataset
+        .map(format_chat)
+        .map(
             predict,
             batched=True,
-            batch_size=8,
-            # with_rank=True,
-            # num_proc=torch.cuda.device_count(),
+            batch_size=128
         )
         .map(parse_output)
         .filter(non_empty_json)
         .filter(gene_non_hallucinatory)
         .filter(attributes_non_empty)
         .map(insert_mentions)
+        .map(clean_section)
         .remove_columns(["text", "output", "json_output"])
     )
     query_dataframe = query_dataset.to_pandas()
+    renamed_column_mapping = {col: str.title(col) for col in query_dataframe.columns}
+    query_dataframe = query_dataframe.rename(columns=renamed_column_mapping)
+    query_dataframe = query_dataframe[
+        [
+            "Gene",
+            "Syntax_N",
+            "Syntax_P",
+            "Statement",
+            "Sentence",
+            "Section",
+            "Specimen_Collection_Date",
+            "Sample_Source",
+            "Filename",
+        ]
+    ]
     query_dataframe.to_excel(excel_out_path, index=False)
     query_dataframe.to_csv(tsv_out_path, sep="\t", index=False)
 
@@ -213,15 +239,21 @@ def parse_output(sample: dict) -> dict:
 
 
 def gene_non_hallucinatory(sample: dict) -> bool:
-    gene = json.loads(sample["json_output"]).get("GENE")
     try:
+        gene = json.loads(sample["json_output"]).get("GENE")
         return gene is not None and "".join(gene).lower() in sample["sentence"].lower()
     except Exception:
+        logger.warning(f"Issue with JSON sample {sample['json_output']}")
         return False
 
 
+def clean_section(sample: dict) -> dict:
+    sample["section"] = str.title(" ".join(sample["section"].split("_")[1:]))
+    return sample
+
+
 def insert_mentions(sample: dict) -> dict:
-    mention_components = {"GENE", "STATEMENT", "SYNTAX_N", "SYNTAX_P", "VUS"}
+    mention_components = {"GENE", "STATEMENT", "SYNTAX_N", "SYNTAX_P"}
     components_dict = json.loads(sample["json_output"])
     for mention_component in mention_components:
         sample[mention_component] = "".join(
@@ -233,7 +265,7 @@ def insert_mentions(sample: dict) -> dict:
 def attributes_non_empty(sample: dict) -> bool:
     return (
         len(
-            {"STATEMENT", "SYNTAX_N", "SYNTAX_P", "VUS"}
+            {"STATEMENT", "SYNTAX_N", "SYNTAX_P"}
             & json.loads(sample["json_output"]).keys()
         )
         > 0
