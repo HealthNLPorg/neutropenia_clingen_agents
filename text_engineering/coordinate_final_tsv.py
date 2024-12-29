@@ -4,19 +4,14 @@ import pathlib
 import pickle
 import re
 from itertools import takewhile
-from typing import Literal
+from typing import Literal, cast
 
 import pandas as pd
 from more_itertools import flatten, partition
 from numpy import nan
 
 argparser = argparse.ArgumentParser(description="")
-# argparser.add_argument("--scnir_pickle", type=str)
-# argparser.add_argument("--scnir_tsv", type=str)
-# argparser.add_argument("--sds_pickle", type=str)
-# argparser.add_argument("--sds_tsv", type=str)
 argparser.add_argument("--scnir_dir", type=str)
-argparser.add_argument("--sds_dir", type=str)
 argparser.add_argument("--finished_tsv", type=str)
 
 
@@ -42,19 +37,23 @@ def get_stem(fn: str) -> str:
     return pathlib.Path(fn).stem
 
 
+def get_original_filename(row: pd.Series) -> str:
+    return "_".join(row.Filename.split("_")[1:])
+
+
 def get_corpus_set(corpus_dir: str) -> set[str]:
     return {get_stem(fn) for fn in os.listdir(corpus_dir)}
 
 
-def complete_frame(frame: pd.DataFrame, pickle_n: str, corpus: CORPUS) -> pd.DataFrame:
+def complete_frame(frame: pd.DataFrame, pickle_n: str) -> pd.DataFrame:
     MRN_to_PT = load_pickle(pickle_n)
     pt_columns = set(flatten(v.keys() for v in MRN_to_PT.values()))
 
     def get_pdf_process(row: pd.Series) -> str:
-        return row.filename.split("_")[0]
+        return row.Filename.split("_")[0]
 
     def get_mrn(row: pd.Series) -> int | str:
-        _str_mrn = "".join(takewhile(str.isnumeric, row.filename.split("_")[1]))
+        _str_mrn = "".join(takewhile(str.isnumeric, row.Filename.split("_")[1]))
         if len(_str_mrn) > 0:
             mrn = int(_str_mrn)
             if mrn == 7107993:
@@ -64,13 +63,9 @@ def complete_frame(frame: pd.DataFrame, pickle_n: str, corpus: CORPUS) -> pd.Dat
         # there are no patients with this issue in SCNIR
         return next(mrn for mrn in MRN_to_PT.keys() if type(mrn) is str)
 
-    def get_original_filename(row: pd.Series) -> str:
-        return "_".join(row.filename.split("_")[1:])
-
-    frame["PDF_PROCESS"] = frame.apply(get_pdf_process, axis=1)
+    frame["PDFProcess"] = frame.apply(get_pdf_process, axis=1)
     frame["MRN"] = frame.apply(get_mrn, axis=1)
-    frame["filename"] = frame.apply(get_original_filename, axis=1)
-    frame["CORPUS"] = corpus
+    frame["Filename"] = frame.apply(get_original_filename, axis=1)
 
     def clean_diagnosis(diagnosis: str) -> str:
         return re.sub("\\s+", " ", diagnosis).strip()
@@ -85,9 +80,9 @@ def complete_frame(frame: pd.DataFrame, pickle_n: str, corpus: CORPUS) -> pd.Dat
                 )
                 mrns = [*sorted(string_mrns), *sorted(numeric_mrns)]
                 raise Exception(
-                    f"Missing Table Entry for mrn {row.MRN} from filename {row.filename} in:\n\n{mrns}"
+                    f"Missing Table Entry for mrn {row.MRN} from filename {row.Filename} in:\n\n{mrns}"
                 )
-            _column_info = PT_info.get(pt_column, nan)
+            _column_info = cast(str, PT_info.get(pt_column, nan))
             if pt_column == "Diagnosis":
                 return clean_diagnosis(_column_info)
             return _column_info
@@ -128,22 +123,22 @@ def process(
     finished_frame = pd.read_csv(finished_tsv, sep="\t")
     corpus_to_pickle = {"SDS": sds_pickle, "SCNIR": scnir_pickle}
     # save lookups since fewer entries here
-    scnir_corpus = get_corpus_set(sds_dir)
+    scnir_corpus = get_corpus_set(scnir_dir)
 
     def filename_to_corpus(row: pd.Series) -> CORPUS:
-        if row["Filename"] in scnir_corpus:
+        if get_original_filename(row) in scnir_corpus:
             return "SCNIR"
         return "SDS"
 
-    finished_frame["CORPUS"] = finished_frame.apply(filename_to_corpus, axis=1)
+    finished_frame["Corpus"] = finished_frame.apply(filename_to_corpus, axis=1)
     corpus_to_frame = {
         corpus: frame
-        for corpus, frame in finished_frame.groupby(finished_frame["CORPUS"])
+        for corpus, frame in finished_frame.groupby(finished_frame["Corpus"])
     }
 
     def get_processed_frame(corpus: CORPUS) -> pd.DataFrame:
         core_corpus_frame = complete_frame(
-            corpus_to_frame[corpus], corpus_to_pickle[corpus], corpus
+            corpus_to_frame[corpus], corpus_to_pickle[corpus]
         )
         return coordinate_other_column(core_corpus_frame, corpus)
 
@@ -161,7 +156,6 @@ def main():
         SCNIR_PICKLE,  # args.scnir_pickle,
         SDS_PICKLE,  # args.sds_pickle,
         args.scnir_dir,
-        args.sds_dir,
         args.finished_tsv,
     )
 
