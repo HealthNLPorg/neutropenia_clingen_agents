@@ -17,12 +17,8 @@ argparser.add_argument("--finished_tsv", type=str)
 
 CORPUS = Literal["SDS", "SCNIR"]
 
-SDS_PICKLE = (
-    "~/neutropenia_corpus/cTAKES_Neutropenia_and_Pts/SDS_cTAKES/sds_table.pickle"
-)
-SCNIR_PICKLE = (
-    "~/neutropenia_corpus/cTAKES_Neutropenia_and_Pts/SCNIR_cTAKES/scnir_table.pickle"
-)
+SDS_PICKLE = "/home/etg/neutropenia_corpus/cTAKES_Neutropenia_and_Pts/SDS_cTAKES/sds_table.pickle"
+SCNIR_PICKLE = "/home/etg/neutropenia_corpus/cTAKES_Neutropenia_and_Pts/SCNIR_cTAKES/scnir_table.pickle"
 
 
 def load_pickle(
@@ -102,13 +98,13 @@ def coordinate_other_column(sub_frame: pd.DataFrame, corpus: CORPUS) -> pd.DataF
 def sds_coordinate_scnir_columns(scnir_frame: pd.DataFrame) -> pd.DataFrame:
     scnir_frame["DF MRN (1)"] = scnir_frame["DF MRN"]
     scnir_frame["DF MRN (2)"] = nan
-    scnir_frame.drop(columns=["DF MRN", "CORPUS"])
+    scnir_frame.drop(columns=["DF MRN", "Corpus"])
     return scnir_frame
 
 
 # keeping the method just in case
 def scnir_coordinate_sds_columns(sds_frame: pd.DataFrame) -> pd.DataFrame:
-    sds_frame.drop(columns=["CORPUS"])
+    sds_frame.drop(columns=["Corpus"])
     return sds_frame
 
 
@@ -116,7 +112,6 @@ def process(
     scnir_pickle: str,
     sds_pickle: str,
     scnir_dir: str,
-    sds_dir: str,
     finished_tsv: str,
 ) -> None:
     original_stem = get_stem(finished_tsv)
