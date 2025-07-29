@@ -49,7 +49,6 @@ parser.add_argument("--model_name", choices=["llama2", "llama3", "mixtral", "qwe
 parser.add_argument(
     "--max_new_tokens",
     type=int,
-    help="1 for classification, on the order of 128 for BIO, on the order of 1024 for free text analysis and explanation",
 )
 parser.add_argument(
     "--query_files",
