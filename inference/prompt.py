@@ -103,7 +103,7 @@ def main() -> None:
     query_dataset = query_dataset["train"]
 
     def few_shot_with_examples(
-        examples: Iterable[Tuple[str, str]]
+        examples: Iterable[Tuple[str, str]],
     ) -> Callable[[str, str], List[Message]]:
         def _few_shot_prompt(s, q):
             return few_shot_prompt(system_prompt=s, query=q, examples=examples)
@@ -137,7 +137,7 @@ def main() -> None:
         max_new_tokens=args.max_new_tokens,
     )
     end = time()
-    logger.info(f"Loading model took {end-start} seconds")
+    logger.info(f"Loading model took {end - start} seconds")
     out_dir = args.output_dir
     out_fn_stem = pathlib.Path(
         args.query_dir
@@ -166,9 +166,9 @@ def main() -> None:
         query_dataset.map(format_chat)
         .map(predict, batched=True, batch_size=128)
         .map(parse_output)
-        .filter(non_empty_json)
-        .filter(gene_non_hallucinatory)
-        .filter(attributes_non_empty)
+        # .filter(non_empty_json)
+        # .filter(gene_non_hallucinatory)
+        # .filter(attributes_non_empty)
         .map(insert_mentions)
         .map(clean_section)
         .remove_columns(["text", "output", "json_output"])
@@ -224,8 +224,18 @@ def clean_section(sample: dict) -> dict:
 
 
 def insert_mentions(sample: dict) -> dict:
+    # Doing the filtering
+    # in here for easier alignment
+    # for easier error analysis
+    if (
+        non_empty_json(sample)
+        and gene_non_hallucinatory(sample)
+        and attributes_non_empty(sample)
+    ):
+        components_dict = json.loads(sample["json_output"])
+    else:
+        components_dict = {}
     mention_components = {"GENE", "STATEMENT", "SYNTAX_N", "SYNTAX_P"}
-    components_dict = json.loads(sample["json_output"])
     for mention_component in mention_components:
         sample[mention_component] = "".join(
             components_dict.get(mention_component, "__UNK__")
@@ -233,14 +243,10 @@ def insert_mentions(sample: dict) -> dict:
     return sample
 
 
-def attributes_non_empty(sample: dict) -> bool:
-    return (
-        len(
-            {"STATEMENT", "SYNTAX_N", "SYNTAX_P"}
-            & json.loads(sample["json_output"]).keys()
-        )
-        > 0
-    )
+def attributes_non_empty(
+    sample: dict, attributes: set[str] = {"VAF", "SYNTAX_N", "SYNTAX_P"}
+) -> bool:
+    return len(attributes & json.loads(sample["json_output"]).keys()) > 0
 
 
 def empty_prompt(system_prompt: str, query: str) -> List[Message]:
