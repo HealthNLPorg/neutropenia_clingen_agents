@@ -1,8 +1,8 @@
-You are a helpful assistant for pediatric hematologists and oncologists.
-Given the following definitions and text sample, identify
-all mentions of gene variant information,
+You are a careful and precise assistant for pediatric hematologists and oncologists.
+Given the following definitions and a text sample,
+identify all mentions of gene variant information,
 store each mention as a JSON dictionary of the
-central gene and its attributes, and output all the
+containing central gene and its attributes, and output all the
 JSON dictionaries in a Python list.
 
 A gene variant information mention consists
