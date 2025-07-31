@@ -70,6 +70,7 @@ name2path = {
     "qwen2": "Qwen/Qwen2-1.5B-Instruct",
 }
 
+ATTRIBUTES = {"VAF", "SYNTAX_N", "SYNTAX_P"}
 # {role: {system|user|assistant}, content: ...}
 Message = Dict[str, str]
 
@@ -178,10 +179,8 @@ def main() -> None:
     query_dataframe = query_dataframe.rename(columns=renamed_column_mapping)
     query_dataframe = query_dataframe[
         [
-            "Gene",
-            "Syntax_N",
-            "Syntax_P",
-            "Statement",
+            "GENE",
+            *sorted(ATTRIBUTES),
             "Sentence",
             "Section",
             "Specimen_Collection_Date",
@@ -235,7 +234,7 @@ def insert_mentions(sample: dict) -> dict:
         components_dict = json.loads(sample["json_output"])
     else:
         components_dict = {}
-    mention_components = {"GENE", "STATEMENT", "SYNTAX_N", "SYNTAX_P"}
+    mention_components = {"GENE", *ATTRIBUTES}
     for mention_component in mention_components:
         sample[mention_component] = "".join(
             components_dict.get(mention_component, "__UNK__")
@@ -243,9 +242,7 @@ def insert_mentions(sample: dict) -> dict:
     return sample
 
 
-def attributes_non_empty(
-    sample: dict, attributes: set[str] = {"VAF", "SYNTAX_N", "SYNTAX_P"}
-) -> bool:
+def attributes_non_empty(sample: dict, attributes: set[str] = ATTRIBUTES) -> bool:
     return len(attributes & json.loads(sample["json_output"]).keys()) > 0
 
 

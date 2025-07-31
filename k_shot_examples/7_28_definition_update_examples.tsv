@@ -10,25 +10,25 @@ TP53 c.818G>A (p.R273H) 0.3% VAF (1826x consensus coverage)	{"GENE": ["TP53"], "
 # New instances
 # Karyn's examples from Ex 1
 # Pathogenic
-TP53 c.792 794delACT (p.L265del) 0.6% VAF (1216x consensus coverage) #	{__TODO__}
+# TP53 c.792 794delACT (p.L265del) 0.6% VAF (1216x consensus coverage) #	{__TODO__}
 # Potential Germline Pathogenic
-SBDS c.258+2T>C (splice) 100% VAF (246x consensus coverage) #
+# SBDS c.258+2T>C (splice) 100% VAF (246x consensus coverage) #
 # VUS
-PRPF8 c.3919A>G (p.M1307V) 1.5% VAF (1104x consensus coverage) #
+# PRPF8 c.3919A>G (p.M1307V) 1.5% VAF (1104x consensus coverage) #
 # Karyn's examples from Ex 2
 # Pathogenic
-TP53 c.711G>T (p.M2371I) 0.9% VAF
+# TP53 c.711G>T (p.M2371I) 0.9% VAF
 # Potential Germline Pathogenic
-SBDS c.258+2T>C (splice) 91.4% VAF (373x consensus coverage) #
-SBDS c.183 184delTAinsCT (p.K62*) 0.9% VAF (805x consensus coverage) #
+# SBDS c.258+2T>C (splice) 91.4% VAF (373x consensus coverage) #
+# SBDS c.183 184delTAinsCT (p.K62*) 0.9% VAF (805x consensus coverage) #
 # Potential Germline VUS
-SBDS c.258+2 258+3invTG (splice) 1.7% VAF (363x consensus coverage)”* NEW
+# SBDS c.258+2 258+3invTG (splice) 1.7% VAF (363x consensus coverage)”* NEW
 # Other VUS ( Karyn has it as VUX given the keyboard proximity of "s" and "x" I'm guessing it's a typo and not terminological)
-CUX1 c.3742C>T (p.R1248W) 2.1% VAF (1630x consensus coverage) #
+# CUX1 c.3742C>T (p.R1248W) 2.1% VAF (1630x consensus coverage) #
 # Karyn's examples from Ex 4 (no Ex 3))
 # Pathogenic
-TP53 c.742C>T (p.R248W) 17.3% VAF (711x consensus coverage)
+# TP53 c.742C>T (p.R248W) 17.3% VAF (711x consensus coverage)
 # Potential Germline Pathogenic (NB for sectionizing, there's a giant header/footer laden page break here)
-SBDS c.258+2T>C (splice) 100% VAF (299x consensus coverage) #
+# SBDS c.258+2T>C (splice) 100% VAF (299x consensus coverage) #
 # Other VUS
-ATM c.2803A>G (p.T935A) 50.4% VAF (1501x consensus coverage) #
+# ATM c.2803A>G (p.T935A) 50.4% VAF (1501x consensus coverage) #
