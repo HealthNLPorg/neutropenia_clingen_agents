@@ -51,6 +51,10 @@ parser.add_argument(
     type=int,
 )
 parser.add_argument(
+    "--batch_size",
+    type=int,
+)
+parser.add_argument(
     "--query_files",
     nargs="+",
     default=[],
@@ -165,7 +169,7 @@ def main() -> None:
 
     query_dataset = (
         query_dataset.map(format_chat)
-        .map(predict, batched=True, batch_size=128)
+        .map(predict, batched=True, batch_size=args.batch_size)
         .map(parse_output)
         # .filter(non_empty_json)
         # .filter(gene_non_hallucinatory)
@@ -175,12 +179,12 @@ def main() -> None:
         .remove_columns(["text", "output", "json_output"])
     )
     query_dataframe = query_dataset.to_pandas()
-    renamed_column_mapping = {col: str.title(col) for col in query_dataframe.columns}
+    renamed_column_mapping = {col: col.title() for col in query_dataframe.columns}
     query_dataframe = query_dataframe.rename(columns=renamed_column_mapping)
     query_dataframe = query_dataframe[
         [
-            "GENE",
-            *sorted(ATTRIBUTES),
+            "Gene",
+            *sorted(map(str.title, ATTRIBUTES)),
             "Sentence",
             "Section",
             "Specimen_Collection_Date",
