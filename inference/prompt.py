@@ -164,7 +164,14 @@ def main() -> None:
         }
 
     def predict(batch):
-        batch["output"] = seqgen_pipe(batch["text"])
+        # Can't believe I'm putting
+        # a branch in a function like this but
+        # Huggingface has screwed up one too many times
+        try:
+            batch["output"] = seqgen_pipe(batch["text"])
+        except Exception:
+            logger.warning("Ran into issue processing the following batch")
+            logger.warning(batch)
         return batch
 
     query_dataset = (
