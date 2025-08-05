@@ -18,7 +18,7 @@ Gene: A distinct sequence of nucleotides forming part of a chromosome, the order
 the order of monomers in a polypeptide or nucleic acid molecule which a cell may synthesize.
 A clinical genomics mention does not exist without a gene as an anchor.
 Its JSON name is GENE.  We are concerned only with gene mentions which are given
-with variant information, so only annotate those.
+with variant information, or are deleted, so only annotate those.
 
 Variant Syntax: The changing of the structure of a gene, resulting in a variant form,
 caused by the alteration of single base units in DNA, or the deletion, insertion,
