@@ -1,0 +1,8 @@
+query	response
+PRPF8 c.4781G>T (p.Cl594F) 1.7% VAF (578x consensus coverage)#& NEW	{"GENE": ["PRPF8"], "SYNTAX_N": ["c.4781G>T"], "SYNTAX_P": ["p.Cl594F"], "VAF": ["1.7% VAF"]}
+TP53 c.535C>T (p.H179Y) 4.4% VAF (1656x consensus coverage)$	{"GENE": ["TP53"], "SYNTAX_N": ["c.535C>T"], "SYNTAX_P": ["p.H179Y"], "VAF": ["4.4% VAF"]}
+TP53 c.524G>A (p.R175H) 3.2% VAF (1639x consensus coverage)$	{"GENE": ["TP53"], "SYNTAX_N": ["c.524G>A"], "SYNTAX_P": ["p.R175H"], "VAF": ["3.2% VAF"]}
+TP53 c.742C>T (p.R248W) 2.7% VAF (677x consensus coverage)A	{"GENE": ["TP53"], "SYNTAX_N": ["c.742C>T"], "SYNTAX_P": ["p.R248W"], "VAF": ["2.7% VAF"]}
+TP53 c.733G>T (p.G245C) 1.3% VAF (679x consensus coverage)#@ A NEW	{"GENE": ["TP53"], "SYNTAX_N": ["c.733G>T"], "SYNTAX_P": ["p.G245C"], "VAF": ["1.3% VAF"]}
+TP53 c.743G>T (p.R248L) 0.6% VAF (675x consensus coverage)#@ A NEW	{"GENE": ["TP53"], "SYNTAX_N": ["c.743G>T"], "SYNTAX_P": ["p.R248L"], "VAF": ["0.6% VAF"]}
+TP53 c.818G>A (p.R273H) 0.3% VAF (1826x consensus coverage)	{"GENE": ["TP53"], "SYNTAX_N": ["c.818G>A"], "SYNTAX_P": ["p.R273H"], "VAF": ["0.3% VAF"]}
