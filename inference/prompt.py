@@ -248,7 +248,7 @@ def insert_mentions(sample: dict) -> dict:
     mention_components = {"GENE", *ATTRIBUTES}
     for mention_component in mention_components:
         sample[mention_component] = "".join(
-            components_dict.get(mention_component, "__UNK__")
+            map(str, components_dict.get(mention_component, ["__UNK__"]))
         )
     return sample
 
