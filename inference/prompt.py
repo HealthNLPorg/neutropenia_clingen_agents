@@ -74,7 +74,7 @@ name2path = {
     "qwen2": "Qwen/Qwen2-1.5B-Instruct",
 }
 
-ATTRIBUTES = {"VAF", "SYNTAX_N", "SYNTAX_P"}
+ATTRIBUTES = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
 # {role: {system|user|assistant}, content: ...}
 Message = Dict[str, str]
 
