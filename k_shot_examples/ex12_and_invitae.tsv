@@ -8,6 +8,6 @@ TP53 c.711G>T (p.M2371I) 0.9% VAF (779x consensus coverage) RELEVANT_PATHOGENIC	
 SBDS c.183 184delTAinsCT (p.K62*) 0.9% VAF (805x consensus coverage) #	{"GENE": ["SBDS"], "SYNTAX_N": ["c.183 184delTAinsCT"], "SYNTAX_P": ["p.K62*"], "VAF": ["0.9% VAF"], "TYPE": []}
 The SBDS c.258+2T>C VAF is a significant overestimate	{"GENE": ["SBDS"], "SYNTAX_N": ["c.258+2T>C"], "SYNTAX_P": [], "VAF": [], "TYPE": []}
 CUX1 c.3742C>T 2.1% VAF (1630x (p.R1248W)	{"GENE": ["CUX1"], "SYNTAX_N": ["c.3742C>T"], "SYNTAX_P": ["p.R1248W"], "VAF": ["2.1% VAF"], "TYPE": []}
-heterozygous	DNAH5 c.10615C>T (p.Arg3539Cys) heterozygous PATHOGENIC {"GENE": ["DNAH5"], "SYNTAX_N": ["c.10615C>T"], "SYNTAX_P": ["p.Arg3539Cys"], "VAF": ["heterozygous"], "TYPE": ["PATHOGENIC"]}
-ITGA2B c.2930G>A (p.Arg977Gln) heterozygous Uncertain Significance {"GENE": ["ITGA2B"], "SYNTAX_N": ["c.2930G>A"], "SYNTAX_P": ["p.Arg977Gln"], "VAF": ["heterozygous"], "TYPE": ["Uncertain Significance"]}
-SEC61A1 c.539C>T (p.Ser180Phe) heterozygous Uncertain Significance {"GENE": ["SEC61A1"], "SYNTAX_N": ["c.539C>T"], "SYNTAX_P": ["p.Ser180Phe"], "VAF": ["heterozygous"], "TYPE": ["Uncertain Significance"]}
+DNAH5 c.10615C>T (p.Arg3539Cys) heterozygous PATHOGENIC	{"GENE": ["DNAH5"], "SYNTAX_N": ["c.10615C>T"], "SYNTAX_P": ["p.Arg3539Cys"], "VAF": ["heterozygous"], "TYPE": ["PATHOGENIC"]}
+ITGA2B c.2930G>A (p.Arg977Gln) heterozygous Uncertain Significance	{"GENE": ["ITGA2B"], "SYNTAX_N": ["c.2930G>A"], "SYNTAX_P": ["p.Arg977Gln"], "VAF": ["heterozygous"], "TYPE": ["Uncertain Significance"]}
+SEC61A1 c.539C>T (p.Ser180Phe) heterozygous Uncertain Significance	{"GENE": ["SEC61A1"], "SYNTAX_N": ["c.539C>T"], "SYNTAX_P": ["p.Ser180Phe"], "VAF": ["heterozygous"], "TYPE": ["Uncertain Significance"]}
