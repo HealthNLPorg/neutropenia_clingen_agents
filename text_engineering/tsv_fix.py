@@ -50,12 +50,20 @@ def fix_frame(
     frontwards_correct: bool = False,
 ) -> None:
     # Assume columns are correct
+    def clean(s: str)-> str:
+        return s.removesuffix("\n")
+
     with open(input_file, mode="r") as f:
-        flines = f.readlines()
-    raw_column_headers = flines[0]
+        flines = map(clean, f.readlines())
+    # logger.info(f"Total instances {len(flines)}")
+    # raw_column_headers = flines[0]
+    raw_column_headers = next(flines)
     column_headers = raw_column_headers.split(delimiter)
+    print(column_headers)
     local_fix_row = partial(fix_row, len(column_headers), frontwards_correct, delimiter)
-    output_frame = pd.DataFrame(map(local_fix_row, flines[1:]), columns=column_headers)
+    stuff = list(map(local_fix_row, flines))
+    print(stuff[:5])
+    output_frame = pd.DataFrame(stuff, columns=column_headers)
     output_frame.to_csv(
         os.path.join(output_dir, os.path.basename(input_file)), sep="\t", index=False
     )
