@@ -40,14 +40,16 @@ def filter_hallucinations(df: pd.DataFrame) -> pd.DataFrame:
         normalize: Callable[[str], str],
         row: pd.Series,
     ) -> str:
-        if row[prediction_key] != "__UNK__" and normalize(
-            row[prediction_key]
-        ) in normalize(row[reference_key]):
-            return row[prediction_key]
+        normalized_prediction = normalize(row[prediction_key])
+        if (
+            len(normalized_prediction) > 0
+            and normalized_prediction != "__UNK__"
+            and normalized_prediction in normalize(row[reference_key])
+        ):
+            return str(row[prediction_key]).strip()
         return "__UNK__"
 
     for mention_column in MENTION_COLUMNS:
-        df[mention_column].fillna("__UNK__")
         local_unkify_hallucination = partial(
             unkify_hallucination, mention_column, "Sentence", __normalize
         )
@@ -66,12 +68,11 @@ def filter_empty_mentions(df: pd.DataFrame) -> pd.DataFrame:
 
 def post_process(input_file: str, output_dir: str) -> None:
     df = pd.read_csv(input_file, sep="\t")
+    df = df.fillna("__UNK__")
     halluccinations_filtered_df = filter_hallucinations(df)
     empties_filtered_df = filter_empty_mentions(halluccinations_filtered_df)
     empties_filtered_df.to_csv(
-        os.path.join(
-            output_dir, f"post_processed_{os.path.basename(input_file)}.tsv"
-        ),
+        os.path.join(output_dir, f"post_processed_{os.path.basename(input_file)}"),
         sep="\t",
         index=False,
     )
