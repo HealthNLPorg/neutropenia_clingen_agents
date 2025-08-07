@@ -93,7 +93,6 @@ def prompt_loop(
     input_dir: str,
     output_dir: str,
 ) -> None:
-
     SYSTEM_PROMPT = (
         "<s>[INST] <<SYS>>\nYou are a helpful assistant for oncologists. "
         "You will read the given PATIENT EHR and summarize the patient's chemotherapy treatment TIMELINES. "

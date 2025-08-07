@@ -7,15 +7,11 @@ import re
 from itertools import chain
 from time import time
 from typing import Callable, Dict, Iterable, List, Tuple, cast
-import torch
 
 import pandas as pd
 import pytz
 from datasets import Dataset, load_dataset
-from tqdm import tqdm
-from transformers import AutoTokenizer, BitsAndBytesConfig, pipeline
-from transformers.pipelines.pt_utils import KeyDataset
-from multiprocess import set_start_method
+from transformers import BitsAndBytesConfig, pipeline
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument(
@@ -110,7 +106,7 @@ def main() -> None:
     logger.info(f"OVER HERE {query_dataset}")
 
     def few_shot_with_examples(
-        examples: Iterable[Tuple[str, str]]
+        examples: Iterable[Tuple[str, str]],
     ) -> Callable[[str, str], List[Message]]:
         def _few_shot_prompt(s, q):
             return few_shot_prompt(system_prompt=s, query=q, examples=examples)
@@ -190,9 +186,11 @@ def try_json(s: str) -> dict:
         d = {}
     return d
 
+
 def parse_output(sample: dict) -> dict:
     sample["json_output"] = try_json(sample["output"])
     return sample
+
 
 def non_hallucinatory(sample: dict) -> bool:
     try:

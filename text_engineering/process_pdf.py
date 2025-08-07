@@ -151,7 +151,6 @@ def process_tcga(
         timeout=tika_timeout,
         TCGA=True,
     ):
-
         # parsed_pdf = parse_pdf(fn)
         ocr_parsed = ocr_used(parsed_pdf)
         pdf_content = parsed_pdf.get("content")

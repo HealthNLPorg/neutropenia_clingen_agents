@@ -1,4 +1,3 @@
-import argparse
 import json
 import os
 
@@ -69,6 +68,7 @@ def get_model(model_name):
     llama_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer)
     return llama_pipeline, tokenizer
 
+
 def prompt_loop(
     few_shot_example_path: str,
     input_filename: str,
@@ -76,7 +76,6 @@ def prompt_loop(
     input_dir: str,
     output_dir: str,
 ) -> None:
-
     SYSTEM_PROMPT = (
         "<s>[INST] <<SYS>>\nYou are a helpful assistant for oncologists. "
         "You will read the given PATIENT EHR and summarize the patient's chemotherapy treatment TIMELINES. "

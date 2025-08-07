@@ -6,7 +6,9 @@ import pandas as pd
 
 def process() -> None:
     df = pd.DataFrame(
-        parse_and_stream("./llama3_step1_results.tsv", "./syntax_statement_parse_few_shot.tsv"),
+        parse_and_stream(
+            "./llama3_step1_results.tsv", "./syntax_statement_parse_few_shot.tsv"
+        ),
         columns=[
             "Gene",
             "Statement",

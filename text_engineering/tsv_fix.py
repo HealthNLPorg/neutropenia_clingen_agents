@@ -50,7 +50,7 @@ def fix_frame(
     frontwards_correct: bool = False,
 ) -> None:
     # Assume columns are correct
-    def clean(s: str)-> str:
+    def clean(s: str) -> str:
         return s.removesuffix("\n")
 
     with open(input_file, mode="r") as f:
