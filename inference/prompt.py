@@ -4,13 +4,18 @@ import logging
 import os
 import pathlib
 import re
+from functools import partial
 from itertools import chain
+from multiprocessing import Pool
 from time import time
 from typing import Callable, Dict, Iterable, List, Tuple, cast
 
 import pandas as pd
-from datasets import Dataset, load_dataset
-from transformers import pipeline
+import torch
+from datasets import Dataset, concatenate_datasets, load_dataset
+from torch.utils.data import Dataset as TorchDataset
+
+from transformers import AutoModel, AutoTokenizer, pipeline
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument(
@@ -51,6 +56,11 @@ parser.add_argument(
     type=int,
 )
 parser.add_argument(
+    "--gpu_pool_size",
+    type=int,
+    help="Total GPUs, each of which can fit a copy of the model",
+)
+parser.add_argument(
     "--query_files",
     nargs="+",
     default=[],
@@ -80,6 +90,20 @@ logging.basicConfig(
     datefmt="%m/%d/%Y %H:%M:%S",
     level=logging.INFO,
 )
+
+
+# class PooledDataset(TorchDataset):
+#     def __init__(self, device_index: int, world_size: int, original_dataset) -> None:
+#         super().__init__()
+#         self.device_index = device_index
+#         self.data = original_dataset[device_index::world_size]
+#         logger.info(self.data)
+
+#     def __len__(self) -> int:
+#         return len(self.data)
+
+#     def __getitem__(self, i):
+#         return self.data[i]
 
 
 def main() -> None:
@@ -190,6 +214,65 @@ def main() -> None:
         ]
     ]
     query_dataframe.to_csv(tsv_out_path, sep="\t", index=False)
+
+
+def format_chat(sample: dict, tokenizer) -> dict:
+    return {
+        "text": tokenizer.apply_chat_template(
+            get_prompt(system_prompt, sample["sentence"]),
+            tokenize=False,
+            add_generation_prompt=False,
+        )
+    }
+
+
+def _text_generation_on_pool(arg):
+    device_index, world_size, final_path, query_dataset = arg
+    start = time()
+    pipe = get_pipeline(final_path, device_index)
+    end = time()
+    logger.info(f"Loading model took {end-start} seconds")
+
+    local_query_dataset_pool = query_dataset[device_index::world_size] # PooledDataset(device_index, world_size, query_dataset)
+    local_query_dataset_pool.map(partial(format_chat, tokenizer=pipe.tokenizer))
+
+    for out in pipe(local_query_dataset_pool):
+        local_query_dataset_pool["output"] = out
+    return local_query_dataset_pool
+
+
+def get_pipeline(final_path: str, device_index: int):
+    # pipeline(
+    #         "text-generation",
+    #         model=final_path,
+    #         # use_auth_token=True,
+    #         device_map="auto",
+    #         model_kwargs={"load_in_4bit": True},
+    #         max_new_tokens=args.max_new_tokens,
+    #         batch_size=32,
+    #     )
+
+    logger.info(f"Creating pipeline for device: {device_index}")
+    # tokenizer = AutoTokenizer.from_pretrained(final_path)
+    device = torch.device(
+        f"cuda:{device_index}" if torch.cuda.is_available() else "cpu"
+    )
+    # model = AutoModel.from_pretrained(final_path).to(device)
+    pipe = pipeline(
+        "text-generation",
+        # model=model,
+        # tokenizer=tokenizer,
+        # truncation=True,
+        # padding=True,
+        # pad_to_max_length=True,
+        model=final_path,
+        model_kwargs={"load_in_4bit": True},
+        # device=device,
+        device_map="auto",
+        framework="pt",
+        # batch_size=16,
+    )
+    return pipe
 
 
 def try_json(s: str) -> dict:
