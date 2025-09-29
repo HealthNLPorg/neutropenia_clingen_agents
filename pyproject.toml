@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neutropenia-med-agents"
+version = "0.1.0"
+dynamic = ["version"]
+authors = [
+    { name = "Health NLP Lab @ CHIP" },
+]
+description = "Original code and eventually an agentic rewrite for the LLM based clinical genomics extraction workflow for the neutropenia project"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["transformers[torch]", "datasets","tika","pandas","datetime","pytz","tqdm", "ruff", "ty"]

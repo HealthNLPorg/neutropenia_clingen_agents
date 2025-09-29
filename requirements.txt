@@ -1,8 +1,0 @@
-transformers
-torch
-datasets
-tika
-pandas
-datetime
-pytz
-tqdm
