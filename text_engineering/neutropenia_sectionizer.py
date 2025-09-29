@@ -4,7 +4,9 @@ from typing import Iterable, List
 
 
 # from https://stackoverflow.com/a/50872841
-def get_close_matches_indexes(word: str, possibilities: Iterable[str], n=3, cutoff=0.6) -> List[int]:
+def get_close_matches_indexes(
+    word: str, possibilities: Iterable[str], n=3, cutoff=0.6
+) -> List[int]:
     """Use SequenceMatcher to return a list of the indexes of the best
     "good enough" matches. word is a sequence for which close matches
     are desired (typically a string).
@@ -38,8 +40,10 @@ def get_close_matches_indexes(word: str, possibilities: Iterable[str], n=3, cuto
     # Strip scores for the best n matches
     return [index for _, index in result]
 
+
 def main() -> None:
     pass
+
 
 if __name__ == "__main__":
     main()

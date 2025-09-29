@@ -56,9 +56,8 @@ parser.add_argument(
     type=int,
 )
 parser.add_argument(
-    "--gpu_pool_size",
+    "--batch_size",
     type=int,
-    help="Total GPUs, each of which can fit a copy of the model",
 )
 parser.add_argument(
     "--query_files",
@@ -80,6 +79,7 @@ name2path = {
     "qwen2": "Qwen/Qwen2-1.5B-Instruct",
 }
 
+ATTRIBUTES = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
 # {role: {system|user|assistant}, content: ...}
 Message = Dict[str, str]
 
@@ -127,7 +127,7 @@ def main() -> None:
     query_dataset = query_dataset["train"]
 
     def few_shot_with_examples(
-        examples: Iterable[Tuple[str, str]]
+        examples: Iterable[Tuple[str, str]],
     ) -> Callable[[str, str], List[Message]]:
         def _few_shot_prompt(s, q):
             return few_shot_prompt(system_prompt=s, query=q, examples=examples)
@@ -161,7 +161,7 @@ def main() -> None:
         max_new_tokens=args.max_new_tokens,
     )
     end = time()
-    logger.info(f"Loading model took {end-start} seconds")
+    logger.info(f"Loading model took {end - start} seconds")
     out_dir = args.output_dir
     out_fn_stem = pathlib.Path(
         args.query_dir
@@ -183,29 +183,34 @@ def main() -> None:
         }
 
     def predict(batch):
-        batch["output"] = seqgen_pipe(batch["text"])
+        # Can't believe I'm putting
+        # a branch in a function like this but
+        # Huggingface has screwed up one too many times
+        try:
+            batch["output"] = seqgen_pipe(batch["text"])
+        except Exception:
+            logger.warning("Ran into issue processing the following batch")
+            logger.warning(batch)
         return batch
 
     query_dataset = (
         query_dataset.map(format_chat)
-        .map(predict, batched=True, batch_size=128)
+        .map(predict, batched=True, batch_size=args.batch_size)
         .map(parse_output)
-        .filter(non_empty_json)
-        .filter(gene_non_hallucinatory)
-        .filter(attributes_non_empty)
+        # .filter(non_empty_json)
+        # .filter(gene_non_hallucinatory)
+        # .filter(attributes_non_empty)
         .map(insert_mentions)
         .map(clean_section)
         .remove_columns(["text", "output", "json_output"])
     )
     query_dataframe = query_dataset.to_pandas()
-    renamed_column_mapping = {col: str.title(col) for col in query_dataframe.columns}
+    renamed_column_mapping = {col: col.title() for col in query_dataframe.columns}
     query_dataframe = query_dataframe.rename(columns=renamed_column_mapping)
     query_dataframe = query_dataframe[
         [
             "Gene",
-            "Syntax_N",
-            "Syntax_P",
-            "Statement",
+            *sorted(map(str.title, ATTRIBUTES)),
             "Sentence",
             "Section",
             "Specimen_Collection_Date",
@@ -307,23 +312,27 @@ def clean_section(sample: dict) -> dict:
 
 
 def insert_mentions(sample: dict) -> dict:
-    mention_components = {"GENE", "STATEMENT", "SYNTAX_N", "SYNTAX_P"}
-    components_dict = json.loads(sample["json_output"])
+    # Doing the filtering
+    # in here for easier alignment
+    # for easier error analysis
+    if (
+        non_empty_json(sample)
+        and gene_non_hallucinatory(sample)
+        and attributes_non_empty(sample)
+    ):
+        components_dict = json.loads(sample["json_output"])
+    else:
+        components_dict = {}
+    mention_components = {"GENE", *ATTRIBUTES}
     for mention_component in mention_components:
         sample[mention_component] = "".join(
-            components_dict.get(mention_component, "__UNK__")
+            map(str, components_dict.get(mention_component, ["__UNK__"]))
         )
     return sample
 
 
-def attributes_non_empty(sample: dict) -> bool:
-    return (
-        len(
-            {"STATEMENT", "SYNTAX_N", "SYNTAX_P"}
-            & json.loads(sample["json_output"]).keys()
-        )
-        > 0
-    )
+def attributes_non_empty(sample: dict, attributes: set[str] = ATTRIBUTES) -> bool:
+    return len(attributes & json.loads(sample["json_output"]).keys()) > 0
 
 
 def empty_prompt(system_prompt: str, query: str) -> List[Message]:
