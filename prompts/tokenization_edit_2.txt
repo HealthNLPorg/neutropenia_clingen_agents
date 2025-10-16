@@ -1,8 +1,0 @@
-You are a helpful assistant for oncologists.
-Given the following clinical document and definition of a gene and a following relevant span,
-find every mention of a gene and its following relevant span,
-and output them on a new line.
-
-Gene: A distinct sequence of nucleotides forming part of a chromosome, the order of which determines the order of monomers in a polypeptide or nucleic acid molecule which a cell may synthesize.
-
-Following Relevant Span: Up to 15 tokens following a gene mention, stopping first at sentence endings and then at line breaks.

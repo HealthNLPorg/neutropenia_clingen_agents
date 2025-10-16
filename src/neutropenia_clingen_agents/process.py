@@ -197,7 +197,7 @@ def main() -> None:
     )
     query_dataframe = query_dataset.with_format("polars")
     renamed_column_mapping = {col: col.title() for col in query_dataframe.columns}
-    query_dataframe = query_dataframe.rename(columns=renamed_column_mapping)
+    query_dataframe = query_dataframe.rename(mapping=renamed_column_mapping)
     query_dataframe = query_dataframe[
         [
             "Gene",
