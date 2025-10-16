@@ -3,15 +3,14 @@ import json
 import logging
 import os
 import pathlib
-import re
-from collections.abc import Callable, Iterable
-from itertools import chain
+from collections.abc import Iterable
+from functools import partial
 from time import time
-from typing import cast
 
-import polars as pl
-from datasets import Dataset, load_dataset
+from datasets import load_dataset
 from transformers import pipeline
+
+from .utils.prompt import build_prompt_template
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument(
@@ -75,7 +74,6 @@ name2path = {
 
 ATTRIBUTES = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
 # {role: {system|user|assistant}, content: ...}
-Message = dict[str, str]
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +109,6 @@ def main() -> None:
     # quantization_config = BitsAndBytesConfig(
     #     load_in_4bit=args.load_in_4bit, load_in_8bit=args.load_in_8bit
     # )
-    system_prompt = get_system_prompt(args.prompt_file)
     logger.info("Building dataset")
     query_dataset = load_dataset(
         "csv",
@@ -120,33 +117,6 @@ def main() -> None:
     )
     query_dataset = query_dataset["train"]
 
-    def few_shot_with_examples(
-        examples: Iterable[tuple[str, str]],
-    ) -> Callable[[str, str], list[Message]]:
-        def _few_shot_prompt(s, q):
-            return few_shot_prompt(system_prompt=s, query=q, examples=examples)
-
-        return _few_shot_prompt
-
-    if args.examples_file is not None:
-        examples = get_examples(args.examples_file)
-        if len(examples) > 0:
-            get_prompt = few_shot_with_examples(examples=examples)
-
-        else:
-            ValueError("Empty examples file")
-
-            get_prompt = empty_prompt
-    elif args.sample_document is not None and args.sample_answer is not None:
-        example = get_document_level_example(args.sample_document, args.sample_answer)
-        if all(len(ex) > 0 for ex in example):
-            get_prompt = few_shot_with_examples(examples=(example,))
-        else:
-            ValueError("Empty sample document and/or empty sample answer")
-
-            get_prompt = empty_prompt
-    else:
-        get_prompt = zero_shot_prompt
     start = time()
     seqgen_pipe = pipeline(
         "text-generation",
@@ -165,10 +135,18 @@ def main() -> None:
     tsv_out_fn = f"{out_fn_stem}.tsv"
     tsv_out_path = os.path.join(out_dir, tsv_out_fn)
 
+    prompt_template = build_prompt_template(
+        args.examples_file, args.sample_document, args.sample_answer
+    )
+
+    with open(args.prompt_file, encoding="utf-8") as f:
+        system_prompt = f.read()
+    prompt_wrapper = partial(prompt_template, system_prompt)
+
     def format_chat(sample: dict) -> dict:
         return {
             "text": seqgen_pipe.tokenizer.apply_chat_template(
-                get_prompt(system_prompt, sample["sentence"]),
+                prompt_wrapper(sample["sentence"]),
                 tokenize=False,
                 add_generation_prompt=False,
                 truncate=True,
@@ -267,161 +245,8 @@ def attributes_non_empty(sample: dict, attributes: set[str] = ATTRIBUTES) -> boo
     return len(attributes & json.loads(sample["json_output"]).keys()) > 0
 
 
-def empty_prompt(system_prompt: str, query: str) -> list[Message]:
-    return []
-
-
-def structure_response(index: int, query: str, answer: str) -> str:
-    return f"Query {index}:\n{query}\nAnswer:\n{answer}\n\n"
-
-
 def basename_no_ext(fn: str) -> str:
     return pathlib.Path(fn).stem.strip()
-
-
-def get_system_prompt(prompt_file_path: str) -> str:
-    with open(prompt_file_path, encoding="utf-8") as f:
-        raw_prompt = f.read()
-        # cleaned_prompt = " ".join(raw_prompt.strip().split())
-        # return cleaned_prompt
-        return raw_prompt
-
-
-def get_query_dataset(queries_file_path: str) -> Dataset:
-    # NB, this will retrieve the extension with the "." at the front
-    # e.g. ".txt" rather than "txt"
-    suffix = pathlib.Path(queries_file_path).suffix.lower()
-    match suffix.strip():
-        case ".tsv":
-            full_dataframe = pl.read_csv(queries_file_path, sep="\t")
-            raw_queries = cast(
-                Iterable[str],
-                (
-                    full_dataframe["query"]
-                    if "query" in full_dataframe.columns
-                    else full_dataframe["sentence"]
-                ),
-            )
-
-            def with_whitespace() -> Iterable[dict[str, str]]:
-                for query in raw_queries:
-                    yield {"text": reinsert_whitespace(query)}
-
-            queries = Dataset.from_generator(with_whitespace)
-        case ".txt" | "":
-            with open(queries_file_path) as qf:
-                query = qf.read()
-            queries = Dataset.from_list([{"text": query}])
-        case _:
-            ValueError(f"Presently unsupported query format {suffix}")
-            queries = Dataset.from_list([])
-    return queries
-
-
-def get_examples(examples_file_path: str) -> list[tuple[str, str]]:
-    suffix = pathlib.Path(examples_file_path).suffix.lower()
-    match suffix.strip():
-        case ".tsv":
-            full_dataframe = pl.read_csv(examples_file_path, sep="\t")
-            raw_queries = cast(
-                Iterable[str],
-                (
-                    full_dataframe["query"]
-                    if "query" in full_dataframe.columns
-                    else full_dataframe["sentence"]
-                ),
-            )
-            queries = (reinsert_whitespace(query) for query in raw_queries)
-            responses = cast(Iterable[str], full_dataframe["response"])
-            examples = list(zip(queries, responses))
-        case ".txt" | "":
-            examples = parse_input_output(examples_file_path)
-        case _:
-            ValueError(f"Presently unsupported examples file format {suffix}")
-            examples = []
-    return examples
-
-
-def parse_input_output(examples_file_path: str) -> list[tuple[str, str]]:
-    def parse_example(raw_example: str) -> tuple[str, str]:
-        result = tuple(
-            elem.strip()
-            for elem in re.split("input:|output:", raw_example)
-            if len(elem.strip()) > 0
-        )
-        assert len(result) == 2
-        return result
-
-    with open(examples_file_path, encoding="utf-8") as ef:
-        raw_str = ef.read()
-        return [
-            parse_example(example.strip())
-            for example in raw_str.split("\n\n")
-            if len(example.split()) > 0
-        ]
-
-
-def get_document_level_example(
-    sample_document_path: str, sample_answer_path: str
-) -> tuple[str, str]:
-    with open(sample_document_path, encoding="utf-8") as sample_document:
-        # not normalizing newlines since those might be useful
-        query = sample_document.read()
-    sample_answer_dataframe = pl.read_csv(sample_answer_path, sep="\t")
-    # specific to earlier use-case etc but for now
-    answer = "\n".join(cast(Iterable[str], sample_answer_dataframe["query"]))
-    return (query, answer)
-
-
-def zero_shot_prompt(system_prompt: str, query: str) -> list[Message]:
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": query},
-    ]
-    return messages
-
-
-# retain newline information via special markers
-# while removing them for storage
-# ( so you can load them later via pandas without parsing errors )
-def clean_whitespace(sample: str) -> str:
-    return (
-        sample.replace("\n", "<cn>")
-        .replace("\t", "<ct>")
-        .replace("\f", "<cf>")
-        .replace("\r", "<cr>")
-    )
-
-
-def reinsert_whitespace(sample: str) -> str:
-    return (
-        sample.replace("<cn>", "\n")
-        .replace("<ct>", "\t")
-        .replace("<cf>", "\f")
-        .replace("<cr>", "\r")
-    )
-
-
-def few_shot_prompt(
-    system_prompt: str, query: str, examples: Iterable[tuple[str, str]]
-) -> list[Message]:
-    def message_pair(ex_query: str, ex_answer: str) -> tuple[Message, ...]:
-        return {"role": "user", "content": ex_query}, {
-            "role": "assistant",
-            "content": ex_answer,
-        }
-
-    few_shot_examples = chain.from_iterable(
-        message_pair(ex_query=ex_query, ex_answer=ex_answer)
-        for ex_query, ex_answer in examples
-    )
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        *few_shot_examples,
-        {"role": "user", "content": query},
-    ]
-    return messages
 
 
 def get_files(raw_dir: str) -> Iterable[str]:
