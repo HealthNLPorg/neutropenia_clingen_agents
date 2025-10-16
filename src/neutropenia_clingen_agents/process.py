@@ -1,17 +1,17 @@
 import argparse
-import datetime
+import json
 import logging
 import os
 import pathlib
 import re
+from collections.abc import Callable, Iterable
 from itertools import chain
 from time import time
-from typing import Callable, Dict, Iterable, List, Tuple, cast
+from typing import cast
 
-import pandas as pd
-import pytz
+import polars as pl
 from datasets import Dataset, load_dataset
-from transformers import BitsAndBytesConfig, pipeline
+from transformers import pipeline
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument(
@@ -24,6 +24,11 @@ parser.add_argument(
     type=str,
 )
 parser.add_argument(
+    "--max_length",
+    type=int,
+    default=8_000,
+)
+parser.add_argument(
     "--sample_answer",
     type=str,
 )
@@ -31,15 +36,8 @@ parser.add_argument("--prompt_file", type=str)
 parser.add_argument(
     "--model_path",
     type=str,
-    default="/lab-share/CHIP-Savova-e2/Public/resources/llama-2/Llama-2-70b-chat-hf",
 )
 
-parser.add_argument(
-    "--attn_implementation",
-    type=str,
-    default="spda",
-    choices=["spda", "flash_attention_2"],
-)
 
 parser.add_argument("--load_in_4bit", action="store_true")
 parser.add_argument("--load_in_8bit", action="store_true")
@@ -50,7 +48,10 @@ parser.add_argument("--model_name", choices=["llama2", "llama3", "mixtral", "qwe
 parser.add_argument(
     "--max_new_tokens",
     type=int,
-    help="1 for classification, on the order of 128 for BIO, on the order of 1024 for free text analysis and explanation",
+)
+parser.add_argument(
+    "--batch_size",
+    type=int,
 )
 parser.add_argument(
     "--query_files",
@@ -72,8 +73,9 @@ name2path = {
     "qwen2": "Qwen/Qwen2-1.5B-Instruct",
 }
 
+ATTRIBUTES = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
 # {role: {system|user|assistant}, content: ...}
-Message = Dict[str, str]
+Message = dict[str, str]
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +86,20 @@ logging.basicConfig(
 )
 
 
+# class PooledDataset(TorchDataset):
+#     def __init__(self, device_index: int, world_size: int, original_dataset) -> None:
+#         super().__init__()
+#         self.device_index = device_index
+#         self.data = original_dataset[device_index::world_size]
+#         logger.info(self.data)
+
+#     def __len__(self) -> int:
+#         return len(self.data)
+
+#     def __getitem__(self, i):
+#         return self.data[i]
+
+
 def main() -> None:
     args = parser.parse_args()
     final_path = ""
@@ -92,9 +108,9 @@ def main() -> None:
     else:
         final_path = args.model_path
     logger.info(f"Loading tokenizer and model for model name {final_path}")
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=args.load_in_4bit, load_in_8bit=args.load_in_8bit
-    )
+    # quantization_config = BitsAndBytesConfig(
+    #     load_in_4bit=args.load_in_4bit, load_in_8bit=args.load_in_8bit
+    # )
     system_prompt = get_system_prompt(args.prompt_file)
     logger.info("Building dataset")
     query_dataset = load_dataset(
@@ -103,11 +119,10 @@ def main() -> None:
         data_files=os.listdir(args.query_dir) if args.query_dir else args.query_files,
     )
     query_dataset = query_dataset["train"]
-    logger.info(f"OVER HERE {query_dataset}")
 
     def few_shot_with_examples(
-        examples: Iterable[Tuple[str, str]],
-    ) -> Callable[[str, str], List[Message]]:
+        examples: Iterable[tuple[str, str]],
+    ) -> Callable[[str, str], list[Message]]:
         def _few_shot_prompt(s, q):
             return few_shot_prompt(system_prompt=s, query=q, examples=examples)
 
@@ -136,73 +151,123 @@ def main() -> None:
     seqgen_pipe = pipeline(
         "text-generation",
         model=final_path,
-        # use_auth_token=True,
         device_map="auto",
-        model_kwargs={"load_in_4bit": True},
         max_new_tokens=args.max_new_tokens,
-        batch_size=32,
     )
     end = time()
-    logger.info(f"Loading model took {end-start} seconds")
-    current_time = datetime.datetime.now(pytz.timezone("America/New_York"))
+    logger.info(f"Loading model took {end - start} seconds")
     out_dir = args.output_dir
     out_fn_stem = pathlib.Path(
-        args.query_dir if args.query_dir else args_query_file
+        args.query_dir
+        if args.query_dir
+        else "_".join(basename_no_ext(fn) for fn in args.query_files)
     ).stem
-    out_fn = f"{out_fn_stem}.txt"
-    out_path = os.path.join(out_dir, out_fn)
+    tsv_out_fn = f"{out_fn_stem}.tsv"
+    tsv_out_path = os.path.join(out_dir, tsv_out_fn)
 
-    def format_chat(sentence: Dict[str, str]) -> Dict[str, str]:
+    def format_chat(sample: dict) -> dict:
         return {
             "text": seqgen_pipe.tokenizer.apply_chat_template(
                 get_prompt(system_prompt, sample["sentence"]),
                 tokenize=False,
                 add_generation_prompt=False,
+                truncate=True,
+                max_length=args.max_length,
             )
         }
 
     def predict(batch):
-        batch["output"] = seqgen_pipe(batch["text"])
+        # Can't believe I'm putting
+        # a branch in a function like this but
+        # Huggingface has screwed up one too many times
+        try:
+            batch["output"] = seqgen_pipe(batch["text"])
+        except Exception:
+            logger.warning("Ran into issue processing the following batch")
+            logger.warning(batch)
         return batch
 
-    pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-    query_dataset = query_dataset.map(format_chat)
-    logger.info(f"Processed dataset for {query_dataset}")
-    logger.info(f"Starting model inference on {query_dataset}")
-    query_dataset = query_dataset.map(
-        predict,
-        batched=True,
-        batch_size=32,
-        # with_rank=True,
-        # num_proc=torch.cuda.device_count(),
+    query_dataset = (
+        query_dataset.map(format_chat)
+        .map(predict, batched=True, batch_size=args.batch_size)
+        .map(parse_output)
+        .map(insert_mentions)
+        .map(clean_section)
+        .remove_columns(["text", "output", "json_output"])
     )
-    logger.info(f"{query_dataset} inference finished")
+    query_dataframe = query_dataset.with_format("polars")
+    renamed_column_mapping = {col: col.title() for col in query_dataframe.columns}
+    query_dataframe = query_dataframe.rename(columns=renamed_column_mapping)
+    query_dataframe = query_dataframe[
+        [
+            "Gene",
+            *sorted(map(str.title, ATTRIBUTES)),
+            "Sentence",
+            "Section",
+            "Specimen_Collection_Date",
+            "Sample_Source",
+            "Filename",
+        ]
+    ]
+    query_dataframe.write_csv(tsv_out_path, sep="\t")
 
 
 def try_json(s: str) -> dict:
     try:
-        d = json.loads(s)
-    except:
-        d = {}
-    return d
+        return json.loads(s)
+    except Exception:
+        return {}
+
+
+def non_empty_json(sample: dict) -> bool:
+    return len(sample["json_output"]) > 0
 
 
 def parse_output(sample: dict) -> dict:
-    sample["json_output"] = try_json(sample["output"])
+    model_answer = sample["output"][0]["generated_text"].split("assistant")[-1].strip()
+    sample["json_output"] = json.dumps(try_json(model_answer))
     return sample
 
 
-def non_hallucinatory(sample: dict) -> bool:
+def gene_non_hallucinatory(sample: dict) -> bool:
     try:
-        return (
-            type(sample["GENE"]) == str
-            and "".join(sample["GENE"]).lower() in s["sentence"].lower()
+        gene = json.loads(sample["json_output"]).get("GENE")
+        return gene is not None and "".join(gene).lower() in sample["sentence"].lower()
+    except Exception:
+        logger.warning(f"Issue with JSON sample {sample['json_output']}")
+        return False
+
+
+def clean_section(sample: dict) -> dict:
+    sample["section"] = str.title(" ".join(sample["section"].split("_")[1:]))
+    return sample
+
+
+def insert_mentions(sample: dict) -> dict:
+    # Doing the filtering
+    # in here for easier alignment
+    # for easier error analysis
+    if (
+        non_empty_json(sample)
+        and gene_non_hallucinatory(sample)
+        and attributes_non_empty(sample)
+    ):
+        components_dict = json.loads(sample["json_output"])
+    else:
+        components_dict = {}
+    mention_components = {"GENE", *ATTRIBUTES}
+    for mention_component in mention_components:
+        sample[mention_component] = "".join(
+            map(str, components_dict.get(mention_component, ["__UNK__"]))
         )
-    except:
-        raise Exception(f"{s.GENE} {s.sentence}")
+    return sample
 
 
-def empty_prompt(system_prompt: str, query: str) -> List[Message]:
+def attributes_non_empty(sample: dict, attributes: set[str] = ATTRIBUTES) -> bool:
+    return len(attributes & json.loads(sample["json_output"]).keys()) > 0
+
+
+def empty_prompt(system_prompt: str, query: str) -> list[Message]:
     return []
 
 
@@ -215,7 +280,7 @@ def basename_no_ext(fn: str) -> str:
 
 
 def get_system_prompt(prompt_file_path: str) -> str:
-    with open(prompt_file_path, mode="rt", encoding="utf-8") as f:
+    with open(prompt_file_path, encoding="utf-8") as f:
         raw_prompt = f.read()
         # cleaned_prompt = " ".join(raw_prompt.strip().split())
         # return cleaned_prompt
@@ -228,7 +293,7 @@ def get_query_dataset(queries_file_path: str) -> Dataset:
     suffix = pathlib.Path(queries_file_path).suffix.lower()
     match suffix.strip():
         case ".tsv":
-            full_dataframe = pd.read_csv(queries_file_path, sep="\t")
+            full_dataframe = pl.read_csv(queries_file_path, sep="\t")
             raw_queries = cast(
                 Iterable[str],
                 (
@@ -238,13 +303,13 @@ def get_query_dataset(queries_file_path: str) -> Dataset:
                 ),
             )
 
-            def with_whitespace() -> Iterable[Dict[str, str]]:
+            def with_whitespace() -> Iterable[dict[str, str]]:
                 for query in raw_queries:
                     yield {"text": reinsert_whitespace(query)}
 
             queries = Dataset.from_generator(with_whitespace)
         case ".txt" | "":
-            with open(queries_file_path, mode="rt") as qf:
+            with open(queries_file_path) as qf:
                 query = qf.read()
             queries = Dataset.from_list([{"text": query}])
         case _:
@@ -253,11 +318,11 @@ def get_query_dataset(queries_file_path: str) -> Dataset:
     return queries
 
 
-def get_examples(examples_file_path: str) -> List[Tuple[str, str]]:
+def get_examples(examples_file_path: str) -> list[tuple[str, str]]:
     suffix = pathlib.Path(examples_file_path).suffix.lower()
     match suffix.strip():
         case ".tsv":
-            full_dataframe = pd.read_csv(examples_file_path, sep="\t")
+            full_dataframe = pl.read_csv(examples_file_path, sep="\t")
             raw_queries = cast(
                 Iterable[str],
                 (
@@ -277,8 +342,8 @@ def get_examples(examples_file_path: str) -> List[Tuple[str, str]]:
     return examples
 
 
-def parse_input_output(examples_file_path: str) -> List[Tuple[str, str]]:
-    def parse_example(raw_example: str) -> Tuple[str, str]:
+def parse_input_output(examples_file_path: str) -> list[tuple[str, str]]:
+    def parse_example(raw_example: str) -> tuple[str, str]:
         result = tuple(
             elem.strip()
             for elem in re.split("input:|output:", raw_example)
@@ -287,7 +352,7 @@ def parse_input_output(examples_file_path: str) -> List[Tuple[str, str]]:
         assert len(result) == 2
         return result
 
-    with open(examples_file_path, mode="rt", encoding="utf-8") as ef:
+    with open(examples_file_path, encoding="utf-8") as ef:
         raw_str = ef.read()
         return [
             parse_example(example.strip())
@@ -298,17 +363,17 @@ def parse_input_output(examples_file_path: str) -> List[Tuple[str, str]]:
 
 def get_document_level_example(
     sample_document_path: str, sample_answer_path: str
-) -> Tuple[str, str]:
-    with open(sample_document_path, mode="rt", encoding="utf-8") as sample_document:
+) -> tuple[str, str]:
+    with open(sample_document_path, encoding="utf-8") as sample_document:
         # not normalizing newlines since those might be useful
         query = sample_document.read()
-    sample_answer_dataframe = pd.read_csv(sample_answer_path, sep="\t")
+    sample_answer_dataframe = pl.read_csv(sample_answer_path, sep="\t")
     # specific to earlier use-case etc but for now
     answer = "\n".join(cast(Iterable[str], sample_answer_dataframe["query"]))
     return (query, answer)
 
 
-def zero_shot_prompt(system_prompt: str, query: str) -> List[Message]:
+def zero_shot_prompt(system_prompt: str, query: str) -> list[Message]:
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": query},
@@ -338,9 +403,9 @@ def reinsert_whitespace(sample: str) -> str:
 
 
 def few_shot_prompt(
-    system_prompt: str, query: str, examples: Iterable[Tuple[str, str]]
-) -> List[Message]:
-    def message_pair(ex_query: str, ex_answer: str) -> Tuple[Message, ...]:
+    system_prompt: str, query: str, examples: Iterable[tuple[str, str]]
+) -> list[Message]:
+    def message_pair(ex_query: str, ex_answer: str) -> tuple[Message, ...]:
         return {"role": "user", "content": ex_query}, {
             "role": "assistant",
             "content": ex_answer,

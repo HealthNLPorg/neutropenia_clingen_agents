@@ -1,0 +1,13 @@
+transformers[torch]
+datasets
+tika
+polars
+datetime
+pytz
+tqdm
+ruff
+ty
+langgraph
+langchain_community
+langgraph-checkpoint-sqlite
+aiosqlite
