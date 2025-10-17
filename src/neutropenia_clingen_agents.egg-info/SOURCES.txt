@@ -1,8 +1,0 @@
-README.md
-pyproject.toml
-src/neutropenia_clingen_agents.egg-info/PKG-INFO
-src/neutropenia_clingen_agents.egg-info/SOURCES.txt
-src/neutropenia_clingen_agents.egg-info/dependency_links.txt
-src/neutropenia_clingen_agents.egg-info/entry_points.txt
-src/neutropenia_clingen_agents.egg-info/requires.txt
-src/neutropenia_clingen_agents.egg-info/top_level.txt

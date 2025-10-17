@@ -1,2 +1,0 @@
-[console_scripts]
-langgraph_tutorial_workthrough = langgraph_tutorial_workthrough.lesson_1:main

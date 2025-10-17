@@ -23,6 +23,7 @@ dependencies = ["transformers[torch]",
 "ty",
 "langgraph",
 "langchain_community",
+"langchain-huggingface",
 "langgraph-checkpoint-sqlite",
 "aiosqlite",
 ]
