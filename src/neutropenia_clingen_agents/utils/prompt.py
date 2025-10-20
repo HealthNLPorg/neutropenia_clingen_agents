@@ -65,6 +65,13 @@ def build_prompt_template(
         return zero_shot_prompt
 
 
+def get_langchain_examples(examples_file_path: str) -> list[dict[str, str]]:
+    return [
+        {"input": _input, "output": _output}
+        for _input, _output in get_examples(examples_file_path)
+    ]
+
+
 def get_examples(examples_file_path: str) -> list[tuple[str, str]]:
     suffix = pathlib.Path(examples_file_path).suffix.lower()
     match suffix.strip():

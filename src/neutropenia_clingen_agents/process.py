@@ -3,21 +3,20 @@ import logging
 import os
 import pathlib
 from collections.abc import Iterable
-from functools import partial
 from time import time
 from typing import cast
 
 import polars as pl
 from datasets import load_dataset
-from transformers import pipeline
 
-from .utils.prompt import build_prompt_template
+from .gene_mention_agent.core import Agent
+from .utils.prompt import get_langchain_examples
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument(
     "--examples_file",
     type=str,
-    help="Check the `get_examples` method for the possible formats for now",
+    help="Check the `get_langchain_examples` method for the possible formats for now",
 )
 parser.add_argument(
     "--sample_document",
@@ -34,7 +33,7 @@ parser.add_argument(
 )
 parser.add_argument("--prompt_file", type=str)
 parser.add_argument(
-    "--model_path",
+    "--model_id",
     type=str,
 )
 
@@ -69,7 +68,7 @@ logging.basicConfig(
 def process(
     query_tsv: str,
     output_dir: str,
-    model_path: str,
+    model_id: str,
     examples_file: str,
     sample_document: str,
     sample_answer: str,
@@ -86,53 +85,37 @@ def process(
     query_dataset = query_dataset["train"]
     logger.info(f"Dataset loaded from {query_tsv}")
 
-    start = time()
-    seqgen_pipe = pipeline(
-        "text-generation",
-        model=model_path,
-        device_map="auto",
-        max_new_tokens=max_new_tokens,
-    )
-    end = time()
-    logger.info(f"Loading model took {end - start} seconds")
     out_dir = output_dir
     out_fn_stem = pathlib.Path(query_tsv).stem
     tsv_out_fn = f"{out_fn_stem}.tsv"
     tsv_out_path = os.path.join(out_dir, tsv_out_fn)
 
-    prompt_template = build_prompt_template(
-        examples_file, sample_document, sample_answer
-    )
-
     with open(prompt_file, encoding="utf-8") as f:
         system_prompt = f.read()
-    prompt_wrapper = partial(prompt_template, system_prompt)
 
-    def format_chat(sample: dict) -> dict:
-        return {
-            "text": seqgen_pipe.tokenizer.apply_chat_template(
-                prompt_wrapper(sample["sentence"]),
-                tokenize=False,
-                add_generation_prompt=False,
-                truncate=True,
-                max_length=max_length,
-            )
-        }
+    start = time()
+    gene_mention_agent = Agent(
+        system_prompt=system_prompt,
+        examples=get_langchain_examples(examples_file),
+        model_id=model_id,
+        hf_pipeline_kwargs={"max_new_tokens": max_new_tokens, "max_length": max_length},
+    )
+
+    end = time()
+    logger.info(f"Loading model took {end - start} seconds")
 
     def predict(batch):
         # Can't believe I'm putting
         # a branch in a function like this but
         # Huggingface has screwed up one too many times
         try:
-            batch["output"] = seqgen_pipe(batch["text"])
+            batch["output"] = gene_mention_agent(batch["text"])
         except Exception:
             logger.warning("Ran into issue processing the following batch")
             logger.warning(batch)
         return batch
 
-    query_dataset = query_dataset.map(format_chat).map(
-        predict, batched=True, batch_size=batch_size
-    )
+    query_dataset = query_dataset.map(predict, batched=True, batch_size=batch_size)
     query_dataframe = cast(pl.DataFrame, query_dataset.with_format("polars"))
     query_dataframe.write_csv(tsv_out_path, separator="\t")
 
@@ -142,7 +125,7 @@ def main() -> None:
     process(
         query_tsv=args.query_tsv,
         output_dir=args.output_dir,
-        model_path=args.model_path,
+        model_id=args.model_id,
         examples_file=args.examples_file,
         sample_document=args.sample_document,
         sample_answer=args.sample_answer,

@@ -32,3 +32,12 @@ class Agent:
             *hf_pipeline_args,
             **hf_pipeline_kwargs,
         )
+
+    # Might be more efficient ultimately to do
+    # use the batch method with GPU recipe a la
+    # https://python.langchain.com/docs/integrations/llms/huggingface_pipelines/#batch-gpu-inference
+    # but from the initial standpoint this looks safer given the issues we
+    # ran into with calling HF pipelines directly vs using Dataset.map
+    # which we ran into in December 2024
+    def __call__(self, inputs: list[str]) -> list[str]:
+        return self.chain.map().invoke(inputs)
