@@ -3,9 +3,7 @@ import json
 import logging
 import os
 import pathlib
-from typing import cast
 
-import polars as pl
 from datasets import load_dataset
 
 parser = argparse.ArgumentParser(description="")
@@ -47,7 +45,7 @@ def post_process(
         .map(clean_section)
         .remove_columns(["text", "output", "json_output"])
     )
-    processed_dataframe = cast(pl.DataFrame, processed_dataset.with_format("polars"))
+    processed_dataframe = processed_dataset.to_polars()
     renamed_column_mapping = {col: col.title() for col in processed_dataframe.columns}
     processed_dataframe = processed_dataframe.rename(mapping=renamed_column_mapping)
     processed_dataframe = processed_dataframe[

@@ -76,7 +76,7 @@ def get_examples(examples_file_path: str) -> list[tuple[str, str]]:
     suffix = pathlib.Path(examples_file_path).suffix.lower()
     match suffix.strip():
         case ".tsv":
-            full_dataframe = pl.read_csv(examples_file_path, sep="\t")
+            full_dataframe = pl.read_csv(examples_file_path, separator="\t")
             raw_queries = cast(
                 Iterable[str],
                 (
@@ -121,7 +121,7 @@ def get_document_level_example(
     with open(sample_document_path, encoding="utf-8") as sample_document:
         # not normalizing newlines since those might be useful
         query = sample_document.read()
-    sample_answer_dataframe = pl.read_csv(sample_answer_path, sep="\t")
+    sample_answer_dataframe = pl.read_csv(sample_answer_path, separator="\t")
     # specific to earlier use-case etc but for now
     answer = "\n".join(cast(Iterable[str], sample_answer_dataframe["query"]))
     return (query, answer)

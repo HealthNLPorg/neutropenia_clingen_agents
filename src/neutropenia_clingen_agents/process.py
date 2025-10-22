@@ -4,9 +4,7 @@ import os
 import pathlib
 from collections.abc import Iterable
 from time import time
-from typing import cast
 
-import polars as pl
 from datasets import load_dataset
 
 from .gene_mention_agent.core import Agent
@@ -16,7 +14,6 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument(
     "--examples_file",
     type=str,
-    help="Check the `get_langchain_examples` method for the possible formats for now",
 )
 parser.add_argument(
     "--sample_document",
@@ -98,25 +95,39 @@ def process(
         system_prompt=system_prompt,
         examples=get_langchain_examples(examples_file),
         model_id=model_id,
-        hf_pipeline_kwargs={"max_new_tokens": max_new_tokens, "max_length": max_length},
+        model_kwargs={"max_length": max_length},
+        pipeline_kwargs={"max_new_tokens": max_new_tokens},
     )
 
     end = time()
     logger.info(f"Loading model took {end - start} seconds")
+
+    def format_instance(batch):
+        batch["input"] = [{"input": sentence} for sentence in batch["sentence"]]
+        return batch
 
     def predict(batch):
         # Can't believe I'm putting
         # a branch in a function like this but
         # Huggingface has screwed up one too many times
         try:
-            batch["output"] = gene_mention_agent(batch["text"])
+            batch["output"] = gene_mention_agent(batch["input"])
         except Exception:
             logger.warning("Ran into issue processing the following batch")
             logger.warning(batch)
         return batch
 
-    query_dataset = query_dataset.map(predict, batched=True, batch_size=batch_size)
-    query_dataframe = cast(pl.DataFrame, query_dataset.with_format("polars"))
+    def clean_output(batch):
+        logger.info(batch["output"])
+        batch["output"] = [instance.get("AI", "ERROR") for instance in batch["output"]]
+        return batch
+
+    query_dataset = (
+        query_dataset.map(format_instance, batched=True, batch_size=batch_size)
+        .map(predict, batched=True, batch_size=batch_size)
+        .map(clean_output, batched=True, batch_size=batch_size)
+    )
+    query_dataframe = query_dataset.to_polars()
     query_dataframe.write_csv(tsv_out_path, separator="\t")
 
 

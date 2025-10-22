@@ -9,24 +9,27 @@ Example = dict[str, str]  # {"input": ..., "output": ...}
 
 def get_lanchain_hf_pipeline(
     model_id: str,
+    model_kwargs: dict,
+    pipeline_kwargs: dict,
     task: str = "text-generation",
     device_map: str | None = "auto",
     device: int = -1,
-    **hf_pipeline_kwargs,
 ) -> HuggingFacePipeline:
     if device_map is not None:
         return HuggingFacePipeline.from_model_id(
             model_id=model_id,
             task=task,
             device_map=device_map,
-            pipeline_kwargs=hf_pipeline_kwargs,
+            model_kwargs=model_kwargs,
+            pipeline_kwargs=pipeline_kwargs,
         )
 
     return HuggingFacePipeline.from_model_id(
         model_id=model_id,
         task=task,
         device=device,
-        pipeline_kwargs=hf_pipeline_kwargs,
+        model_kwargs=model_kwargs,
+        pipeline_kwargs=pipeline_kwargs,
     )
 
 

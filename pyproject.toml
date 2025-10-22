@@ -11,21 +11,19 @@ authors = [
 ]
 description = "LangGraph based encapsulation of Neutropenia clinical genomics extraction agents."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10, <3.11"
 dependencies = ["transformers[torch]",
 "datasets",
-"tika",
+"accelerate",
+"bitsandbytes",
 "polars",
+"pandas", # Until Huggingface integrates polars and lets you do column selection that way
 "datetime",
 "pytz",
 "tqdm",
 "ruff",
 "ty",
-"langgraph",
-"langchain_community",
 "langchain-huggingface",
-"langgraph-checkpoint-sqlite",
-"aiosqlite",
 ]
 
 [tool.setuptools.packages.find]
