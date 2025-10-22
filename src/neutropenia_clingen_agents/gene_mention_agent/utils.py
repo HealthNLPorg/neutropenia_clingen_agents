@@ -3,8 +3,24 @@ from langchain_core.prompts import (
     FewShotChatMessagePromptTemplate,
 )
 from langchain_huggingface.llms import HuggingFacePipeline
+from pydantic import BaseModel, Field
 
 Example = dict[str, str]  # {"input": ..., "output": ...}
+
+
+class ClinGenMention(BaseModel):
+    # Not great attribute naming but we've been using
+    # the capital idiom thus far
+    GENE: list[str] = Field(
+        description="The anchor of any gene mention, the mention does not exist without a gene"
+    )
+    SYNTAX_N: list[str] = Field(description="Gene variant nucleotide syntax")
+    SYNTAX_P: list[str] = Field(description="Gene variant protein syntax")
+    VAF: list[str] = Field(description="Variant allele frequency")
+    TYPE: list[str] = Field(description="Variant type (pathogentic, unknown, etc.)")
+    ZYGOSITY: list[str] = Field(
+        description="Whether the variant is heterozygous (VAF > 50%)"
+    )
 
 
 def get_lanchain_hf_pipeline(

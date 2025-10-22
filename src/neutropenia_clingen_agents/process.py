@@ -117,15 +117,16 @@ def process(
             logger.warning(batch)
         return batch
 
-    def clean_output(batch):
-        logger.info(batch["output"])
-        batch["output"] = [instance.get("AI", "ERROR") for instance in batch["output"]]
-        return batch
+    # def clean_output(batch):
+    #     logger.info(batch["output"])
+    #     batch["output"] = [instance.get("AI", "ERROR") for instance in batch["output"]]
+    #     return batch
 
     query_dataset = (
-        query_dataset.map(format_instance, batched=True, batch_size=batch_size)
-        .map(predict, batched=True, batch_size=batch_size)
-        .map(clean_output, batched=True, batch_size=batch_size)
+        query_dataset.map(format_instance, batched=True, batch_size=batch_size).map(
+            predict, batched=True, batch_size=batch_size
+        )
+        # .map(clean_output, batched=True, batch_size=batch_size)
     )
     query_dataframe = query_dataset.to_polars()
     query_dataframe.write_csv(tsv_out_path, separator="\t")

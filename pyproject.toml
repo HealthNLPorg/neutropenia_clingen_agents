@@ -15,7 +15,7 @@ requires-python = ">=3.10, <3.11"
 dependencies = ["transformers[torch]",
 "datasets",
 "accelerate",
-"bitsandbytes",
+'bitsandbytes ; platform_system != "Darwin"',
 "polars",
 "pandas", # Until Huggingface integrates polars and lets you do column selection that way
 "datetime",
@@ -24,6 +24,7 @@ dependencies = ["transformers[torch]",
 "ruff",
 "ty",
 "langchain-huggingface",
+"pydantic"
 ]
 
 [tool.setuptools.packages.find]
