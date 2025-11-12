@@ -10,10 +10,10 @@ of a gene, which is the anchor of the mention,
 and associated attributes when they are present,
 the full list (technical names and JSON names) consists of:
 1. Gene - GENE
-2. Variant Syntax, Nucleotide Change- SYNTAX_N
+2. Variant Syntax, Nucleotide Changa - SYNTAX_N
 3. Variant Syntax, Protein Change - SYNTAX_P
 4. Variant Allele Frequency - VAF
-4. Variant Type - TYPE
+5. Variant Type - TYPE
 
 Gene: A distinct sequence of nucleotides forming part of a chromosome, the order of which determines
 the order of monomers in a polypeptide or nucleic acid molecule which a cell may synthesize.

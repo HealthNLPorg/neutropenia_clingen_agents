@@ -96,7 +96,11 @@ def process(
         examples=get_langchain_examples(examples_file),
         model_id=model_id,
         model_kwargs={"max_length": max_length},
-        pipeline_kwargs={"max_new_tokens": max_new_tokens},
+        # TODO - best guess is the default for continue... is
+        # model determined - need to figure this out
+        pipeline_kwargs={
+            "max_new_tokens": max_new_tokens,
+        },
     )
 
     end = time()

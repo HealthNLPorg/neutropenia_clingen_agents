@@ -24,7 +24,8 @@ dependencies = ["transformers[torch]",
 "ruff",
 "ty",
 "langchain-huggingface",
-"pydantic"
+"pydantic",
+"protobuf"
 ]
 
 [tool.setuptools.packages.find]

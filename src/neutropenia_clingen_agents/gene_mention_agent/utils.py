@@ -1,3 +1,4 @@
+from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import (
     ChatPromptTemplate,
     FewShotChatMessagePromptTemplate,
@@ -14,13 +15,13 @@ class ClinGenMention(BaseModel):
     GENE: list[str] = Field(
         description="The anchor of any gene mention, the mention does not exist without a gene"
     )
-    SYNTAX_N: list[str] = Field(description="Gene variant nucleotide syntax")
-    SYNTAX_P: list[str] = Field(description="Gene variant protein syntax")
+    SYNTAX_N: list[str] = Field(description="Gene variant syntax - nucleotide change")
+    SYNTAX_P: list[str] = Field(description="Gene variant syntax - protein change")
     VAF: list[str] = Field(description="Variant allele frequency")
     TYPE: list[str] = Field(description="Variant type (pathogentic, unknown, etc.)")
-    ZYGOSITY: list[str] = Field(
-        description="Whether the variant is heterozygous (VAF > 50%)"
-    )
+    # ZYGOSITY: list[str] = Field(
+    #     description="Whether the variant is heterozygous (VAF > 50%)"
+    # )
 
 
 def get_lanchain_hf_pipeline(
@@ -31,26 +32,19 @@ def get_lanchain_hf_pipeline(
     device_map: str | None = "auto",
     device: int = -1,
 ) -> HuggingFacePipeline:
-    if device_map is not None:
-        return HuggingFacePipeline.from_model_id(
-            model_id=model_id,
-            task=task,
-            device_map=device_map,
-            model_kwargs=model_kwargs,
-            pipeline_kwargs=pipeline_kwargs,
-        )
-
     return HuggingFacePipeline.from_model_id(
         model_id=model_id,
         task=task,
-        device=device,
+        device_map=device_map,
         model_kwargs=model_kwargs,
         pipeline_kwargs=pipeline_kwargs,
     )
 
 
 def build_few_shot_prompt_template(
-    system_prompt: str, examples: list[Example]
+    system_prompt: str,
+    examples: list[Example],
+    parser: PydanticOutputParser,
 ) -> ChatPromptTemplate:
     example_prompt = ChatPromptTemplate.from_messages(
         [
@@ -70,4 +64,4 @@ def build_few_shot_prompt_template(
             few_shot_prompt,
             ("human", "{input}"),
         ]
-    )
+    )  # .partial(format_instructions=parser.get_format_instructions())
