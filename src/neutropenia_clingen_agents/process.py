@@ -6,9 +6,9 @@ from collections.abc import Iterable
 from time import time
 
 from datasets import load_dataset
+from transformers import pipeline
 
-from .gene_mention_agent.core import Agent
-from .utils.prompt import get_langchain_examples
+from .utils.prompt import get_huggingface_prompt_builder
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument(
@@ -90,48 +90,42 @@ def process(
     with open(prompt_file, encoding="utf-8") as f:
         system_prompt = f.read()
 
+    build_huggingface_prompt = get_huggingface_prompt_builder(
+        examples_file, sample_document, sample_answer
+    )
     start = time()
-    gene_mention_agent = Agent(
-        system_prompt=system_prompt,
-        examples=get_langchain_examples(examples_file),
-        model_id=model_id,
-        model_kwargs={"max_length": max_length},
-        # TODO - best guess is the default for continue... is
-        # model determined - need to figure this out
-        pipeline_kwargs={
-            "max_new_tokens": max_new_tokens,
-        },
+    seqgen_pipe = pipeline(
+        "text-generation",
+        model=model_id,
+        device_map="auto",
+        max_new_tokens=max_new_tokens,
     )
 
     end = time()
     logger.info(f"Loading model took {end - start} seconds")
 
-    def format_instance(batch):
-        batch["input"] = [{"input": sentence} for sentence in batch["sentence"]]
-        return batch
+    def format_to_chat_template(sample: dict) -> dict:
+        return {
+            "text": seqgen_pipe.tokenizer.apply_chat_template(
+                build_huggingface_prompt(system_prompt, sample["sentence"]),
+                tokenize=False,
+                add_generation_prompt=False,
+                truncate=True,
+                max_length=8_000,
+            )
+        }
 
-    def predict(batch):
-        # Can't believe I'm putting
-        # a branch in a function like this but
-        # Huggingface has screwed up one too many times
+    def predict(sample: dict) -> dict:
         try:
-            batch["output"] = gene_mention_agent(batch["input"])
+            sample["output"] = seqgen_pipe(sample["text"])
         except Exception:
-            logger.warning("Ran into issue processing the following batch")
-            logger.warning(batch)
-        return batch
+            logger.warning("Ran into issue processing the following sample")
+            logger.warning(sample)
+        return sample
 
-    # def clean_output(batch):
-    #     logger.info(batch["output"])
-    #     batch["output"] = [instance.get("AI", "ERROR") for instance in batch["output"]]
-    #     return batch
-
-    query_dataset = (
-        query_dataset.map(format_instance, batched=True, batch_size=batch_size).map(
-            predict, batched=True, batch_size=batch_size
-        )
-        # .map(clean_output, batched=True, batch_size=batch_size)
-    )
+    query_dataset = query_dataset.map(
+        format_to_chat_template, batched=True, batch_size=batch_size
+    ).map(predict, batched=True, batch_size=batch_size)
     query_dataframe = query_dataset.to_polars()
     query_dataframe.write_csv(tsv_out_path, separator="\t")
 

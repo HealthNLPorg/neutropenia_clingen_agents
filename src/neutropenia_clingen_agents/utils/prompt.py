@@ -33,7 +33,7 @@ def few_shot_prompt(
     return messages
 
 
-def build_prompt_template(
+def get_huggingface_prompt_builder(
     examples_file: str | None, sample_document: str | None, sample_answer: str | None
 ) -> Callable[[str, str], list[Message]]:
     def few_shot_with_examples(
