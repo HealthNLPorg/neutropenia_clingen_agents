@@ -58,9 +58,11 @@ class Agent:
                     instance,
                     {
                         "pipeline_kwargs": {
-                            "truncate": True,
-                            "add_generation_prompt": False,
-                            "tokenize": False,
+                            "tokenizer_encode_kwargs": {
+                                "truncate": True,
+                                "add_generation_prompt": False,
+                                "tokenize": False,
+                            }
                         }
                     },
                 )
