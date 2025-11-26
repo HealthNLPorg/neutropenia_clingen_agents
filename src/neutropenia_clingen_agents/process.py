@@ -3,11 +3,13 @@ import logging
 import os
 import pathlib
 from collections.abc import Iterable
+from functools import partial
 from time import time
 
 from datasets import load_dataset
 from transformers import pipeline
 
+from .utils.filesystem import make_directory
 from .utils.prompt import get_huggingface_prompt_builder
 
 parser = argparse.ArgumentParser(description="")
@@ -83,6 +85,7 @@ def process(
     logger.info(f"Dataset loaded from {query_tsv}")
 
     out_dir = output_dir
+    make_directory(out_dir)
     out_fn_stem = pathlib.Path(query_tsv).stem
     tsv_out_fn = f"{out_fn_stem}.tsv"
     tsv_out_path = os.path.join(out_dir, tsv_out_fn)
@@ -104,16 +107,21 @@ def process(
     end = time()
     logger.info(f"Loading model took {end - start} seconds")
 
+    local_build_prompt = partial(build_huggingface_prompt, system_prompt)
+
+    def __apply_chat_template(prompt: str) -> str:
+        return seqgen_pipe.tokenizer.apply_chat_template(
+            prompt,
+            tokenize=False,
+            add_generation_prompt=False,
+            truncate=True,
+            max_length=8_000,
+        )
+
     def format_to_chat_template(sample: dict) -> dict:
-        return {
-            "text": seqgen_pipe.tokenizer.apply_chat_template(
-                build_huggingface_prompt(system_prompt, sample["sentence"]),
-                tokenize=False,
-                add_generation_prompt=False,
-                truncate=True,
-                max_length=8_000,
-            )
-        }
+        prompts = map(local_build_prompt, sample["sentence"])
+        sample["text"] = [__apply_chat_template(prompt) for prompt in prompts]
+        return sample
 
     def predict(sample: dict) -> dict:
         try:
