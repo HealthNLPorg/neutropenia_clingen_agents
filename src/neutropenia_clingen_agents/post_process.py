@@ -4,7 +4,9 @@ import logging
 import os
 import pathlib
 
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
+
+from .utils.filesystem import make_directory
 
 parser = argparse.ArgumentParser(description="")
 
@@ -25,7 +27,7 @@ logging.basicConfig(
 ATTRIBUTES = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
 
 
-def post_process(
+def post_process_from_tsv(
     processed_tsv: str,
     output_dir: str,
 ) -> None:
@@ -34,11 +36,14 @@ def post_process(
         sep="\t",
         data_files=(processed_tsv,),
     )
-    out_dir = output_dir
-    out_fn_stem = pathlib.Path(processed_tsv).stem
-    tsv_out_fn = f"{out_fn_stem}.tsv"
-    tsv_out_path = os.path.join(out_dir, tsv_out_fn)
+    make_directory(output_dir)
+    query_tsv_stem = pathlib.Path(processed_tsv).stem
+    post_processed_tsv_query_tsv = f"post_processed_{query_tsv_stem}.tsv"
+    post_processed_tsv_out_path = os.path.join(output_dir, post_processed_tsv_query_tsv)
+    post_process_dataset(processed_dataset, post_processed_tsv_out_path)
 
+
+def post_process_dataset(processed_dataset: Dataset, tsv_out_path: str) -> None:
     processed_dataset = (
         processed_dataset.map(parse_output)
         .map(insert_mentions)
@@ -119,7 +124,7 @@ def attributes_non_empty(sample: dict, attributes: set[str] = ATTRIBUTES) -> boo
 
 def main() -> None:
     args = parser.parse_args()
-    post_process(
+    post_process_from_tsv(
         args.processed_tsv,
         args.output_dir,
     )

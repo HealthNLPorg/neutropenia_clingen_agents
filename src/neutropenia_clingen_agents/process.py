@@ -9,6 +9,7 @@ from time import time
 from datasets import load_dataset
 from transformers import pipeline
 
+from .post_process import post_process_dataset
 from .utils.filesystem import make_directory
 from .utils.prompt import get_huggingface_prompt_builder
 
@@ -53,6 +54,7 @@ parser.add_argument(
 )
 
 parser.add_argument("--output_dir", type=str)
+parser.add_argument("--post_process", action="store_true")
 
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,7 @@ def process(
     max_new_tokens: int,
     max_length: int,
     batch_size: int,
+    post_process: bool,
 ) -> None:
     query_dataset = load_dataset(
         "csv",
@@ -84,11 +87,10 @@ def process(
     query_dataset = query_dataset["train"]
     logger.info(f"Dataset loaded from {query_tsv}")
 
-    out_dir = output_dir
-    make_directory(out_dir)
-    out_fn_stem = pathlib.Path(query_tsv).stem
-    tsv_out_fn = f"{out_fn_stem}.tsv"
-    tsv_out_path = os.path.join(out_dir, tsv_out_fn)
+    make_directory(output_dir)
+    query_tsv_stem = pathlib.Path(query_tsv).stem
+    processed_tsv_query_tsv = f"processed_{query_tsv_stem}.tsv"
+    processed_tsv_out_path = os.path.join(output_dir, processed_tsv_query_tsv)
 
     with open(prompt_file, encoding="utf-8") as f:
         system_prompt = f.read()
@@ -115,7 +117,7 @@ def process(
             tokenize=False,
             add_generation_prompt=False,
             truncate=True,
-            max_length=8_000,
+            max_length=max_length,
         )
 
     def format_to_chat_template(sample: dict) -> dict:
@@ -135,7 +137,13 @@ def process(
         format_to_chat_template, batched=True, batch_size=batch_size
     ).map(predict, batched=True, batch_size=batch_size)
     query_dataframe = query_dataset.to_polars()
-    query_dataframe.write_csv(tsv_out_path, separator="\t")
+    query_dataframe.write_csv(processed_tsv_out_path, separator="\t")
+    if post_process:
+        post_processed_tsv_query_tsv = f"post_processed_{query_tsv_stem}.tsv"
+        post_processed_tsv_out_path = os.path.join(
+            output_dir, post_processed_tsv_query_tsv
+        )
+        post_process_dataset(query_dataset, post_processed_tsv_out_path)
 
 
 def main() -> None:
@@ -151,6 +159,7 @@ def main() -> None:
         max_new_tokens=args.max_new_tokens,
         max_length=args.max_length,
         batch_size=args.batch_size,
+        post_process=args.post_process,
     )
 
 
