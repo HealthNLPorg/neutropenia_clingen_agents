@@ -48,7 +48,7 @@ def post_process_dataset(processed_dataset: Dataset, tsv_out_path: str) -> None:
         processed_dataset.map(parse_output)
         .map(insert_mentions)
         .map(clean_section)
-        .remove_columns(["text", "output", "json_output"])
+        .remove_columns(["text", "output", "json_output", "raw_output"])
     )
     processed_dataframe = processed_dataset.to_polars()
     renamed_column_mapping = {col: col.title() for col in processed_dataframe.columns}
@@ -79,8 +79,7 @@ def non_empty_json(sample: dict) -> bool:
 
 
 def parse_output(sample: dict) -> dict:
-    model_answer = sample["output"][0]["generated_text"].split("assistant")[-1].strip()
-    sample["json_output"] = json.dumps(try_json(model_answer))
+    sample["json_output"] = json.dumps(try_json(sample["raw_output"]))
     return sample
 
 

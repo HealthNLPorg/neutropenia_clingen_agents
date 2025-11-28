@@ -66,6 +66,13 @@ logging.basicConfig(
 )
 
 
+def parse_raw_output(sample: dict) -> dict:
+    sample["raw_output"] = (
+        sample["output"][0]["generated_text"].split("assistant")[-1].strip()
+    )
+    return sample
+
+
 def process(
     query_tsv: str,
     output_dir: str,
@@ -89,8 +96,8 @@ def process(
 
     make_directory(output_dir)
     query_tsv_stem = pathlib.Path(query_tsv).stem
-    processed_tsv_query_tsv = f"processed_{query_tsv_stem}.tsv"
-    processed_tsv_out_path = os.path.join(output_dir, processed_tsv_query_tsv)
+    processed_query_json = f"processed_{query_tsv_stem}.json"
+    processed_json_out_path = os.path.join(output_dir, processed_query_json)
 
     with open(prompt_file, encoding="utf-8") as f:
         system_prompt = f.read()
@@ -133,11 +140,19 @@ def process(
             logger.warning(sample)
         return sample
 
-    query_dataset = query_dataset.map(
-        format_to_chat_template, batched=True, batch_size=batch_size
-    ).map(predict, batched=True, batch_size=batch_size)
-    query_dataframe = query_dataset.to_polars()
-    query_dataframe.write_csv(processed_tsv_out_path, separator="\t")
+    query_dataset = (
+        query_dataset.map(format_to_chat_template, batched=True, batch_size=batch_size)
+        .map(predict, batched=True, batch_size=batch_size)
+        .map(parse_raw_output)
+    )
+    query_dataset.to_json(processed_json_out_path)
+    try:
+        processed_query_tsv = f"processed_{query_tsv_stem}.tsv"
+        processed_tsv_out_path = os.path.join(output_dir, processed_query_tsv)
+        query_dataframe = query_dataset.to_polars()
+        query_dataframe.write_csv(processed_tsv_out_path, separator="\t")
+    except Exception as e:
+        logger.error(f"{e} - still having issues with polars output")
     if post_process:
         post_processed_tsv_query_tsv = f"post_processed_{query_tsv_stem}.tsv"
         post_processed_tsv_out_path = os.path.join(
