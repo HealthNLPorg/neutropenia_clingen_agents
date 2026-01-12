@@ -50,7 +50,7 @@ def get_huggingface_prompt_builder(
             return few_shot_with_examples(examples=examples)
 
         else:
-            ValueError("Empty examples file")
+            raise ValueError("Empty examples file")
 
             return empty_prompt
     elif sample_document is not None and sample_answer is not None:
@@ -58,7 +58,7 @@ def get_huggingface_prompt_builder(
         if all(len(ex) > 0 for ex in example):
             return few_shot_with_examples(examples=(example,))
         else:
-            ValueError("Empty sample document and/or empty sample answer")
+            raise ValueError("Empty sample document and/or empty sample answer")
 
             return empty_prompt
     else:
@@ -91,7 +91,7 @@ def get_examples(examples_file_path: str) -> list[tuple[str, str]]:
         case ".txt" | "":
             examples = parse_input_output(examples_file_path)
         case _:
-            ValueError(f"Presently unsupported examples file format {suffix}")
+            raise ValueError(f"Presently unsupported examples file format {suffix}")
             examples = []
     return examples
 
