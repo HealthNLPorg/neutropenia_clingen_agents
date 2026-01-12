@@ -140,7 +140,7 @@ def main() -> None:
             get_prompt = few_shot_with_examples(examples=examples)
 
         else:
-            ValueError("Empty examples file")
+            raise ValueError("Empty examples file")
 
             get_prompt = empty_prompt
     elif args.sample_document is not None and args.sample_answer is not None:
@@ -148,7 +148,7 @@ def main() -> None:
         if all(len(ex) > 0 for ex in example):
             get_prompt = few_shot_with_examples(examples=(example,))
         else:
-            ValueError("Empty sample document and/or empty sample answer")
+            raise ValueError("Empty sample document and/or empty sample answer")
 
             get_prompt = empty_prompt
     else:
@@ -381,7 +381,7 @@ def get_query_dataset(queries_file_path: str) -> Dataset:
                 query = qf.read()
             queries = Dataset.from_list([{"text": query}])
         case _:
-            ValueError(f"Presently unsupported query format {suffix}")
+            raise ValueError(f"Presently unsupported query format {suffix}")
             queries = Dataset.from_list([])
     return queries
 
@@ -405,7 +405,7 @@ def get_examples(examples_file_path: str) -> List[Tuple[str, str]]:
         case ".txt" | "":
             examples = parse_input_output(examples_file_path)
         case _:
-            ValueError(f"Presently unsupported examples file format {suffix}")
+            raise ValueError(f"Presently unsupported examples file format {suffix}")
             examples = []
     return examples
 
