@@ -1,6 +1,6 @@
 import click
 
-from ..utils.rest import read_root
+from ..utils.rest import app
 
 
 @click.command("rest", context_settings={"show_default": True})
@@ -11,7 +11,6 @@ from ..utils.rest import read_root
     default="0.0.0.0",
     help="Host address to serve the REST app.",
 )
-@click.option("--message", type=str)
 @click.option(
     "-p", "--port", type=int, default=8000, help="Port to serve the REST app."
 )
@@ -22,8 +21,8 @@ from ..utils.rest import read_root
     default=False,
     help="Auto-reload the REST app.",
 )
-def rest_command(message: str, host: str, port: int, reload: bool) -> None:
+def rest_command(host: str, port: int, reload: bool) -> None:
     """Start a REST application from a model."""
     import uvicorn
 
-    uvicorn.run(read_root(message), host=host, port=port, reload=reload)
+    uvicorn.run(app, host=host, port=port, reload=reload)
