@@ -11,15 +11,15 @@ class ClinGenMention(BaseModel):
     gene: tuple[int, int] = Field(
         description="The anchor of any gene mention, the mention does not exist without a gene"
     )
-    syntax_n: tuple[int, int] = Field(
+    syntax_n: tuple[int, int] | None = Field(
         description="Gene variant syntax - nucleotide change"
     )
-    syntax_p: tuple[int, int] = Field(
+    syntax_p: tuple[int, int] | None = Field(
         description="Gene variant syntax - protein change"
     )
-    vaf: tuple[int, int] = Field(description="Variant allele frequency")
-    variant_type: tuple[int, int] = Field(
-        description="Variant type (pathogentic, unknown, etc.)"
+    vaf: tuple[int, int] | None = Field(description="Variant allele frequency")
+    variant_type: tuple[tuple[int, int], bool] | None = Field(
+        description="Variant type (pathogenic, benign, unknown, etc.) and whether is parsed from source sentence (true if parsed from sentence, false if from section header)"
     )
     heterozygous: bool | None = Field(
         description="Whether the variant is heterozygous (VAF > 50%)"

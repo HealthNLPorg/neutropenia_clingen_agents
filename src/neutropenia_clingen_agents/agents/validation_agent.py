@@ -6,6 +6,7 @@ from functools import partial
 from more_itertools import first_true, one
 
 from ..utils.serialization import aggresive_normalize
+from .state_model import ClinGenMention, ClingenAgentState
 
 logger = logging.getLogger(__name__)
 
@@ -81,3 +82,63 @@ class ValidationAgent:
                 attributes,
                 pred=partial(ValidationAgent.not_hallucination, sample=sample),
             )
+
+    @staticmethod
+    def build_attribute_validated_json(
+        attributes: Collection[str],
+        sample: str,
+        sample_json: Mapping[str, Sequence[str]],
+    ) -> Mapping[str, str | None]:
+        return {
+            attribute_name: ValidationAgent.select_non_hallucinatory_attribute(
+                attribute_name=attribute_name,
+                sample=sample,
+                sample_json=sample_json,
+            )
+            for attribute_name in attributes
+        }
+
+    def get_validated_mention_json(
+        self,
+        sample: str,
+    ) -> Mapping[str, str | None] | None:
+        sample_json = ValidationAgent.parse_json(sample)
+        if sample_json is None:
+            return None
+        if not ValidationAgent.json_non_empty(sample_json):
+            return None
+        return ValidationAgent.build_attribute_validated_json(
+            attributes=self.attributes, sample=sample, sample_json=sample_json
+        )
+
+    @staticmethod
+    def is_heterozygous(vaf: str | None, threshold: int = 50) -> bool | None:
+        # TODO fill in the heuristic
+        return None
+
+    def get_clingen_mention(
+        self, sentence: str, section_header: str
+    ) -> ClinGenMention | None:
+        validated_mention_json = self.get_validated_mention_json(sentence)
+        if validated_mention_json is None:
+            return None
+        if validated_mention_json.get("GENE") is not None and any(
+            validated_mention_json.get(attribute) is not None
+            for attribute in self.attributes
+            if attribute != "GENE"
+        ):
+            return ClinGenMention(
+                source_text=sentence,
+                gene=validated_mention_json.get("GENE"),
+                syntax_n=validated_mention_json.get("SYNTAX_N"),
+                syntax_p=validated_mention_json.get("SYNTAX_P"),
+                vaf=validated_mention_json.get("VAF"),
+                variant_type=validated_mention_json.get("TYPE"),
+                heterozygous=ValidationAgent.is_heterozygous(
+                    validated_mention_json.get("VAF")
+                ),
+            )
+
+    def __call__(self, agent_state: ClingenAgentState) -> ClingenAgentState:
+        # TODO finish
+        return agent_state
