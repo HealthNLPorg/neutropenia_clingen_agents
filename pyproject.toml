@@ -13,7 +13,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["transformers[torch]",
 "datasets",
-"click",
 "accelerate",
 'bitsandbytes ; platform_system != "Darwin"',
 "polars",
@@ -23,13 +22,12 @@ dependencies = ["transformers[torch]",
 "ruff",
 "ty",
 "langgraph",
-"FastAPI",
+"fastapi",
 "uvicorn[standard]"
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["langgraph_tutorial_workthrough*"]
 
 [project.scripts]
 "agents" = "neutropenia_clingen_agents.__main__:main"
