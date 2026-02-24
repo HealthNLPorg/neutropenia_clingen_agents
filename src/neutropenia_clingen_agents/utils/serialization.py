@@ -37,5 +37,6 @@ def relevant_character(char: str) -> bool:
     return relevant_unicode_category(category)
 
 
-def aggresive_normalize(sample: str) -> str:
-    return " ".join("".join(filter(relevant_character, sample)).split())
+@cache
+def remove_non_printable_characters(sample: str) -> str:
+    return "".join(filter(relevant_character, sample))
