@@ -208,14 +208,14 @@ class ValidationAgent:
     def parse_sentence(
         sentence: Sentence, section_header: str, attributes: Collection[str]
     ) -> Sentence:
-        if sentence["mention"] is not None:
+        if sentence.mention is not None:
             raise ValueError("sentence is already populated with mention")
         return Sentence(
-            offsets=sentence["offsets"],
-            sentence_string=sentence["sentence_string"],
-            raw_output=sentence["raw_output"],
+            offsets=sentence.offsets,
+            sentence_string=sentence.sentence_string,
+            raw_output=sentence.raw_output,
             mention=ValidationAgent.get_clingen_mention(
-                sentence=sentence["sentence_string"],
+                sentence=sentence.sentence_string,
                 section_header=section_header,
                 attributes=attributes,
             ),
@@ -225,8 +225,8 @@ class ValidationAgent:
     def parse_section(
         document_section: DocumentSection, attributes: Collection[str]
     ) -> DocumentSection:
-        section_header = document_section["section_header"]
-        offsets = document_section["offsets"]
+        section_header = document_section.section_header
+        offsets = document_section.offsets
         return DocumentSection(
             section_header=section_header,
             offsets=offsets,
@@ -236,19 +236,19 @@ class ValidationAgent:
                     section_header=section_header,
                     attributes=attributes,
                 )
-                for sentence in document_section["sentences"]
+                for sentence in document_section.sentences
             ],
         )
 
     @staticmethod
     def parse_document(document: Document, attributes: Collection[str]) -> Document:
         return Document(
-            file_id=document["file_id"],
+            file_id=document.file_id,
             sections=[
                 ValidationAgent.parse_section(
                     document_section=section, attributes=attributes
                 )
-                for section in document["sections"]
+                for section in document.sections
             ],
         )
 
@@ -258,6 +258,6 @@ class ValidationAgent:
                 ValidationAgent.parse_document(
                     document=document, attributes=self.attributes
                 )
-                for document in agent_state["documents"]
+                for document in agent_state.documents
             ]
         )

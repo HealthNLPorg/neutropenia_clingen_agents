@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Iterable, Sequence
 from functools import partial
-from operator import itemgetter
+from operator import attrgetter
 from time import time
 from typing import cast
 
@@ -92,45 +92,44 @@ class MentionAgent:
         return self.__predict(self.__format_to_chat_template(inputs))
 
     def __process_section(self, document_section: DocumentSection) -> DocumentSection:
-        if len(document_section["sentences"]) == 0:
-            section_offsets = document_section["offsets"]
+        if len(document_section.sentences) == 0:
+            section_offsets = document_section.offsets
             raise ValueError(f"No sentences in section {section_offsets}")
         if any(
-            sentence["raw_output"] is not None or sentence["mention"] is not None
-            for sentence in document_section["sentences"]
+            sentence.raw_output is not None or sentence.mention is not None
+            for sentence in document_section.sentences
         ):
-            section_offsets = document_section["offsets"]
-            raise ValueError(f"One of the sentences in section {section_offsets}")
+            section_offsets = document_section.offsets
+            raise ValueError(
+                f"One of the sentences in section {section_offsets} is already populated with mentions"
+            )
         raw_outputs = self.process_inputs(
-            map(itemgetter("sentence_string"), document_section["sentences"])
+            map(attrgetter("sentence_string"), document_section.sentences)
         )
         updated_sentences = [
             Sentence(
-                offsets=sentence["offsets"],
-                sentence_string=sentence["sentence_string"],
+                offsets=sentence.offsets,
+                sentence_string=sentence.sentence_string,
                 raw_output=raw_output,
                 mention=None,
             )
-            for raw_output, sentence in zip(raw_outputs, document_section["sentences"])
+            for raw_output, sentence in zip(raw_outputs, document_section.sentences)
         ]
         return DocumentSection(
-            section_header=document_section["section_header"],
-            offsets=document_section["offsets"],
+            section_header=document_section.section_header,
+            offsets=document_section.offsets,
             sentences=updated_sentences,
         )
 
     def __process_document(self, document: Document) -> Document:
         return Document(
-            file_id=document["file_id"],
-            sections=[
-                self.__process_section(section) for section in document["sections"]
-            ],
+            file_id=document.file_id,
+            sections=[self.__process_section(section) for section in document.sections],
         )
 
     def __call__(self, agent_state: ClingenAgentState) -> ClingenAgentState:
         return ClingenAgentState(
             documents=[
-                self.__process_document(document)
-                for document in agent_state["documents"]
+                self.__process_document(document) for document in agent_state.documents
             ]
         )
