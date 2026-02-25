@@ -5,6 +5,7 @@ from operator import attrgetter
 from time import time
 from typing import cast
 
+from langchain_core.runnables import Runnable
 from transformers import pipeline
 
 from ..utils.prompt import get_huggingface_prompt_builder
@@ -19,7 +20,7 @@ logging.basicConfig(
 )
 
 
-class MentionAgent:
+class MentionAgent(Runnable):
     def __init__(
         self,
         model_id: str,

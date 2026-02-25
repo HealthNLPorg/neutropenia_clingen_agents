@@ -4,6 +4,7 @@ import re
 from collections.abc import Collection, Mapping, Sequence
 from functools import partial
 
+from langchain_core.runnables import Runnable
 from more_itertools import one
 
 from ..utils.serialization import remove_non_printable_characters
@@ -24,7 +25,7 @@ logging.basicConfig(
 )
 
 
-class ValidationAgent:
+class ValidationAgent(Runnable):
     def __init__(
         self, attributes: Collection[str] = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
     ) -> None:
