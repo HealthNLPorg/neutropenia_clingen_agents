@@ -18,7 +18,7 @@ class ClinGenMention(BaseModel):
         description="Gene variant syntax - protein change"
     )
     vaf: Final[tuple[int, int] | None] = Field(description="Variant allele frequency")
-    variant_type: Final[tuple[str, tuple[int, int] | None] | None] = Field(
+    variant_type: Final[tuple[int, int] | None] = Field(
         description="Variant type (pathogenic, benign, unknown, etc.) and whether is parsed from source sentence (true if parsed from sentence, false if from section header)"
     )
     heterozygous: Final[bool | None] = Field(

@@ -166,7 +166,7 @@ class ValidationAgent(Runnable):
 
     @staticmethod
     def get_clingen_mention(
-        sentence: str, section_header: str, attributes: Collection[str]
+        sentence: str, attributes: Collection[str]
     ) -> ClinGenMention | None:
         validated_mention_json = ValidationAgent.get_validated_mention_json(
             sentence, attributes
@@ -185,30 +185,19 @@ class ValidationAgent(Runnable):
                 if vaf_offsets is None
                 else sentence[vaf_offsets[0] : vaf_offsets[1]]
             )
-            type_offsets = validated_mention_json.get("TYPE")
-            type_str = (
-                None
-                if type_offsets is None
-                else sentence[type_offsets[0] : type_offsets[1]]
-            )
-            type_packet = (
-                type_str if type_str is not None else section_header,
-                type_offsets if type_offsets is not None else None,
-            )
+            variant_type = validated_mention_json.get("TYPE")
             return ClinGenMention(
                 source_text=sentence,
                 gene=gene,
                 syntax_n=validated_mention_json.get("SYNTAX_N"),
                 syntax_p=validated_mention_json.get("SYNTAX_P"),
                 vaf=validated_mention_json.get("VAF"),
-                variant_type=type_packet,
+                variant_type=variant_type,
                 heterozygous=ValidationAgent.is_heterozygous(vaf_str),
             )
 
     @staticmethod
-    def parse_sentence(
-        sentence: Sentence, section_header: str, attributes: Collection[str]
-    ) -> Sentence:
+    def parse_sentence(sentence: Sentence, attributes: Collection[str]) -> Sentence:
         if sentence.mention is not None:
             raise ValueError("sentence is already populated with mention")
         return Sentence(
@@ -217,7 +206,6 @@ class ValidationAgent(Runnable):
             raw_output=sentence.raw_output,
             mention=ValidationAgent.get_clingen_mention(
                 sentence=sentence.sentence_string,
-                section_header=section_header,
                 attributes=attributes,
             ),
         )
@@ -234,7 +222,6 @@ class ValidationAgent(Runnable):
             sentences=[
                 ValidationAgent.parse_sentence(
                     sentence=sentence,
-                    section_header=section_header,
                     attributes=attributes,
                 )
                 for sentence in document_section.sentences
