@@ -9,7 +9,6 @@ from more_itertools import one
 
 from ..utils.serialization import remove_non_printable_characters
 from .state_model import (
-    ClingenAgentState,
     ClinGenMention,
     Document,
     DocumentSection,
@@ -240,12 +239,5 @@ class ValidationAgent(Runnable):
             ],
         )
 
-    def __call__(self, agent_state: ClingenAgentState) -> ClingenAgentState:
-        return ClingenAgentState(
-            documents=[
-                ValidationAgent.parse_document(
-                    document=document, attributes=self.attributes
-                )
-                for document in agent_state.documents
-            ]
-        )
+    def __call__(self, sentence: Sentence) -> Sentence:
+        return ValidationAgent.parse_sentence(sentence, self.attributes)

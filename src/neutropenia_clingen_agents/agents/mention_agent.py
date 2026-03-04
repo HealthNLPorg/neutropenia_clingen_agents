@@ -9,7 +9,7 @@ from langchain_core.runnables import Runnable
 from transformers import pipeline
 
 from ..utils.prompt import get_huggingface_prompt_builder
-from .state_model import ClingenAgentState, Document, DocumentSection, Sentence
+from .state_model import Document, DocumentSection, Sentence
 
 logger = logging.getLogger(__name__)
 
@@ -128,9 +128,10 @@ class MentionAgent(Runnable):
             sections=[self.__process_section(section) for section in document.sections],
         )
 
-    def __call__(self, agent_state: ClingenAgentState) -> ClingenAgentState:
-        return ClingenAgentState(
-            documents=[
-                self.__process_document(document) for document in agent_state.documents
-            ]
+    def __call__(self, sentence: Sentence) -> Sentence:
+        return Sentence(
+            offsets=sentence.offsets,
+            sentence_string=sentence.sentence_string,
+            raw_output=self.process_inputs([sentence.sentence_string])[0],
+            mention=None,
         )
