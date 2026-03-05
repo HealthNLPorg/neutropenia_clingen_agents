@@ -16,9 +16,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--reload",
-    type=bool,
-    is_flag=True,
-    default=False,
+    action="store_true",
     help="Auto-reload the REST app.",
 )
 
