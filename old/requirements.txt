@@ -1,7 +1,0 @@
-transformers[torch]
-accelerate
-torch
-huggingface-hub
-scikit-learn
-datasets
-bitsandbytes
