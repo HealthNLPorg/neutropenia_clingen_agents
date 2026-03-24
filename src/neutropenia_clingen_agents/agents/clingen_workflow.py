@@ -5,6 +5,22 @@ from langgraph.graph.state import END, CompiledStateGraph, StateGraph
 from .mention_agent import MentionAgent
 from .state_model import ClingenAgentState
 from .validation_agent import ValidationAgent
+import argparse
+
+parser = argparse.ArgumentParser(description="")
+
+parser.add_argument(
+    "--model_id",
+    type=str,
+    default="unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit",
+)
+parser.add_argument("--max_new_tokens", type=int, default=512)
+parser.add_argument("--max_length", type=int, default=8_000)
+parser.add_argument("--system_prompt", type=str)
+parser.add_argument("--examples_file", type=str)
+parser.add_argument("--sample_document", type=str)
+parser.add_argument("--sample_answer", type=str)
+parser.add_argument("--attributes", nargs="+", default={})
 
 
 def build_agent_workflow(
@@ -38,3 +54,21 @@ def build_agent_workflow(
     workflow.add_edge("mention_agent", "validation_agent")
     workflow.add_edge("validation_agent", END)
     return workflow.compile()
+
+
+def main() -> None:
+    args = parser.parse_args()
+    build_agent_workflow(
+        model_id=args.model_id,
+        max_new_tokens=args.max_new_tokens,
+        max_length=args.max_length,
+        system_prompt=args.system_prompt,
+        examples_file=args.examples_file,
+        sample_document=args.sample_document,
+        sample_answer=args.sample_answer,
+        attributes=args.attributes,
+    )
+
+
+if __name__ == "__main__":
+    main()
