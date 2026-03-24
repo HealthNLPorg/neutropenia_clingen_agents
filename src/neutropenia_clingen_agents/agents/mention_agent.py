@@ -3,9 +3,10 @@ from collections.abc import Iterable, Sequence
 from functools import partial
 from operator import attrgetter
 from time import time
-from typing import cast
+from typing import Any, cast
 
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableConfig
+from langchain_core.runnables.utils import Input, Output
 from transformers import pipeline
 
 from ..utils.prompt import get_huggingface_prompt_builder
@@ -32,7 +33,9 @@ class MentionAgent(Runnable):
         sample_answer: str | None,
     ) -> None:
         build_huggingface_prompt = get_huggingface_prompt_builder(
-            examples_file, sample_document, sample_answer
+            examples_file=examples_file,
+            sample_document=sample_document,
+            sample_answer=sample_answer,
         )
         start = time()
         self.model_pipeline = pipeline(
@@ -45,18 +48,14 @@ class MentionAgent(Runnable):
         end = time()
         logger.info("Loading model took %d seconds", end - start)
 
-        self.local_build_prompt = partial(
-            build_huggingface_prompt, system_prompt=system_prompt
-        )
+        self.local_build_prompt = partial(build_huggingface_prompt, system_prompt)
         self.local_apply_chat_template = partial(
             self.__apply_chat_template, max_length=max_length
         )
 
     @staticmethod
     def __parse_raw_output(model_output) -> str:
-        return (
-            model_output["output"][0]["generated_text"].split("assistant")[-1].strip()
-        )
+        return model_output[0]["generated_text"].split("assistant")[-1].strip()
 
     def __apply_chat_template(
         self, prompted_messages: list[dict[str, str]], max_length: int
@@ -72,7 +71,9 @@ class MentionAgent(Runnable):
             truncate=True,
             max_length=max_length,
         )
-        if isinstance(result, list[str]):
+        if isinstance(result, list) and all(
+            map(lambda elem: isinstance(elem, str), result)
+        ):
             return cast(list[str], result)
         raise ValueError(f"Incorrect result type {type(result)}")
 
@@ -86,8 +87,8 @@ class MentionAgent(Runnable):
                 MentionAgent.__parse_raw_output(output)
                 for output in self.model_pipeline(inputs)
             ]
-        except Exception:
-            raise ValueError(f"Ran into issue processing the following sample {inputs}")
+        except Exception as e:
+            raise ValueError(f"Ran into {e} processing the following sample {inputs}")
 
     def process_inputs(self, inputs: Iterable[str]) -> Sequence[str]:
         return self.__predict(self.__format_to_chat_template(inputs))
@@ -133,5 +134,17 @@ class MentionAgent(Runnable):
             offsets=sentence.offsets,
             sentence_string=sentence.sentence_string,
             raw_output=self.process_inputs([sentence.sentence_string])[0],
+            mention=None,
+        )
+
+    def invoke(
+        self, input: Input, config: RunnableConfig | None = None, **kwargs: Any
+    ) -> Output:
+        if not isinstance(input, Sentence):
+            raise ValueError(f"Input is not a sentence, is: {type(input)}")
+        return Sentence(
+            offsets=input.offsets,
+            sentence_string=input.sentence_string,
+            raw_output=self.process_inputs([input.sentence_string])[0],
             mention=None,
         )

@@ -10,7 +10,7 @@ authors = [
 ]
 description = "LangGraph based encapsulation of Neutropenia clinical genomics extraction agents."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = ["transformers[torch]",
 "datasets",
 "accelerate",

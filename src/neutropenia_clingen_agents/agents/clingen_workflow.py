@@ -1,12 +1,12 @@
+import argparse
 from collections.abc import Collection
-import polars as pl
 
+import polars as pl
 from langgraph.graph.state import END, CompiledStateGraph, StateGraph
 
 from .mention_agent import MentionAgent
-from .state_model import ClingenAgentState
+from .state_model import Sentence
 from .validation_agent import ValidationAgent
-import argparse
 
 parser = argparse.ArgumentParser(description="")
 
@@ -36,7 +36,7 @@ def build_agent_workflow(
     sample_answer: str | None,
     attributes: Collection[str] | None,
 ) -> CompiledStateGraph:
-    workflow = StateGraph(ClingenAgentState)
+    workflow = StateGraph(Sentence)
     mention_agent_node = MentionAgent(
         model_id=model_id,
         max_new_tokens=max_new_tokens,
@@ -85,7 +85,16 @@ def run_workflow(
     )
     df = pl.read_csv(query_tsv, separator="\t")
     for sentence in df["sentence"]:
-        print(agent_workflow.invoke(sentence))
+        print(
+            agent_workflow.invoke(
+                Sentence(
+                    offsets=(0, len(sentence)),
+                    sentence_string=sentence,
+                    raw_output=None,
+                    mention=None,
+                )
+            )
+        )
 
 
 def main() -> None:
@@ -102,6 +111,7 @@ def main() -> None:
         sample_answer=args.sample_answer,
         attributes=args.attributes,
     )
+
 
 if __name__ == "__main__":
     main()

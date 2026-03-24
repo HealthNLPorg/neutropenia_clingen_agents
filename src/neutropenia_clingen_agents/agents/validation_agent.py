@@ -241,3 +241,8 @@ class ValidationAgent(Runnable):
 
     def __call__(self, sentence: Sentence) -> Sentence:
         return ValidationAgent.parse_sentence(sentence, self.attributes)
+
+    def invoke(self, input, config, **kwargs):
+        if not isinstance(input, Sentence):
+            raise ValueError(f"Input is not a sentence, is: {type(input)}")
+        return ValidationAgent.parse_sentence(input, self.attributes)

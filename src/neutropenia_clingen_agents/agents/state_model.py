@@ -7,7 +7,7 @@ Offsets = tuple[int, int]
 
 
 class ClinGenMention(BaseModel):
-    source_text: Final[str] = Field("Source text for the mention")
+    source_text: Final[str] = Field(description="Source text for the mention")
     gene: Final[tuple[int, int]] = Field(
         description="The anchor of any gene mention, the mention does not exist without a gene"
     )
@@ -26,6 +26,8 @@ class ClinGenMention(BaseModel):
     )
 
 
+# TODO - have this or the general state model implement __concat__
+# so the type checker is OK with having it as an output
 class Sentence(BaseModel):
     offsets: Final[Offsets]
     sentence_string: Final[str]
