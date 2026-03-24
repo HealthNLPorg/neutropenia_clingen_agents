@@ -1,4 +1,5 @@
 from collections.abc import Collection
+import polars as pl
 
 from langgraph.graph.state import END, CompiledStateGraph, StateGraph
 
@@ -16,10 +17,12 @@ parser.add_argument(
 )
 parser.add_argument("--max_new_tokens", type=int, default=512)
 parser.add_argument("--max_length", type=int, default=8_000)
-parser.add_argument("--system_prompt", type=str)
+parser.add_argument("--prompt_file", type=str)
 parser.add_argument("--examples_file", type=str)
 parser.add_argument("--sample_document", type=str)
 parser.add_argument("--sample_answer", type=str)
+parser.add_argument("--query_tsv", type=str)
+parser.add_argument("--output_dir", type=str)
 parser.add_argument("--attributes", nargs="+", default={})
 
 
@@ -56,19 +59,49 @@ def build_agent_workflow(
     return workflow.compile()
 
 
+def run_workflow(
+    model_id: str,
+    max_new_tokens: int,
+    max_length: int,
+    prompt_file: str,
+    query_tsv: str,
+    output_dir: str,
+    examples_file: str | None,
+    sample_document: str | None,
+    sample_answer: str | None,
+    attributes: Collection[str] | None,
+) -> None:
+    with open(prompt_file) as f:
+        system_prompt = f.read()
+    agent_workflow = build_agent_workflow(
+        model_id=model_id,
+        max_new_tokens=max_new_tokens,
+        max_length=max_length,
+        system_prompt=system_prompt,
+        examples_file=examples_file,
+        sample_document=sample_document,
+        sample_answer=sample_answer,
+        attributes=attributes,
+    )
+    df = pl.read_csv(query_tsv, separator="\t")
+    for sentence in df["sentence"]:
+        print(agent_workflow.invoke(sentence))
+
+
 def main() -> None:
     args = parser.parse_args()
-    build_agent_workflow(
+    run_workflow(
         model_id=args.model_id,
         max_new_tokens=args.max_new_tokens,
         max_length=args.max_length,
-        system_prompt=args.system_prompt,
+        prompt_file=args.prompt_file,
+        query_tsv=args.query_tsv,
+        output_dir=args.output_dir,
         examples_file=args.examples_file,
         sample_document=args.sample_document,
         sample_answer=args.sample_answer,
         attributes=args.attributes,
     )
-
 
 if __name__ == "__main__":
     main()
