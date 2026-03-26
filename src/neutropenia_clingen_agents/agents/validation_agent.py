@@ -9,8 +9,6 @@ from more_itertools import one
 from ..utils.serialization import remove_non_printable_characters
 from .state_model import (
     ClinGenMention,
-    Document,
-    DocumentSection,
     Sentence,
 )
 
@@ -206,36 +204,6 @@ class ValidationAgent:
                 sentence=sentence.sentence_string,
                 attributes=attributes,
             ),
-        )
-
-    @staticmethod
-    def parse_section(
-        document_section: DocumentSection, attributes: Collection[str]
-    ) -> DocumentSection:
-        section_header = document_section.section_header
-        offsets = document_section.offsets
-        return DocumentSection(
-            section_header=section_header,
-            offsets=offsets,
-            sentences=[
-                ValidationAgent.parse_sentence(
-                    sentence=sentence,
-                    attributes=attributes,
-                )
-                for sentence in document_section.sentences
-            ],
-        )
-
-    @staticmethod
-    def parse_document(document: Document, attributes: Collection[str]) -> Document:
-        return Document(
-            file_id=document.file_id,
-            sections=[
-                ValidationAgent.parse_section(
-                    document_section=section, attributes=attributes
-                )
-                for section in document.sections
-            ],
         )
 
     def process_sentence(self, sentence: Sentence) -> Sentence:

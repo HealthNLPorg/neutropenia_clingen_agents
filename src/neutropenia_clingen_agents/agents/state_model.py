@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from typing import Final
 
 from pydantic import BaseModel, Field
@@ -26,29 +25,8 @@ class ClinGenMention(BaseModel):
     )
 
 
-# TODO - have this or the general state model implement __concat__
-# so the type checker is OK with having it as an output
 class Sentence(BaseModel):
-    offsets: Offsets
-    sentence_string: str
-    raw_output: str | None
-    mention: ClinGenMention | None
-
-
-class DocumentSection(BaseModel):
-    section_header: Final[str]
     offsets: Final[Offsets]
-    sentences: Final[Sequence[Sentence]]
-
-
-class Document(BaseModel):
-    file_id: Final[str]
-    sections: Final[Sequence[DocumentSection]]
-
-
-# class ClingenAgentState(BaseModel):
-#     documents: Final[Sequence[Document]]
-
-
-class ClingenAgentState(BaseModel):
-    sentences: list[Sentence] = Field(description="Sentence", default_factory=list)
+    sentence_string: Final[str]
+    raw_output: Final[str | None]
+    mention: Final[ClinGenMention | None]
