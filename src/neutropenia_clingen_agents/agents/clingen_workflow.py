@@ -34,8 +34,8 @@ def build_agent_workflow(
     examples_file: str | None,
     sample_document: str | None,
     sample_answer: str | None,
-    anchor: str | None,
-    attributes: Collection[str] | None,
+    anchor: str | None = None,
+    attributes: Collection[str] | None = None,
 ) -> CompiledStateGraph:
     workflow = StateGraph(Sentence)
     mention_agent_node = MentionAgent(
