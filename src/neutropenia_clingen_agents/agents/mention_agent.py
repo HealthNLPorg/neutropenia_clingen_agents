@@ -2,14 +2,12 @@ import logging
 from collections.abc import Iterable, Sequence
 from functools import partial
 from time import time
-from typing import Any, cast
+from typing import cast
 
-from langchain_core.runnables import Runnable, RunnableConfig
-from langchain_core.runnables.utils import Input, Output
 from transformers import pipeline
 
 from ..utils.prompt import get_huggingface_prompt_builder
-from .state_model import ClingenAgentState, Sentence
+from .state_model import Sentence
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,7 @@ logging.basicConfig(
 )
 
 
-class MentionAgent(Runnable):
+class MentionAgent:
     def __init__(
         self,
         model_id: str,
@@ -98,13 +96,4 @@ class MentionAgent(Runnable):
             sentence_string=sentence.sentence_string,
             raw_output=self.process_inputs([sentence.sentence_string])[0],
             mention=None,
-        )
-
-    def invoke(self, input: Input, config: RunnableConfig | None = None, **kwargs: Any):
-        if not isinstance(input, ClingenAgentState):
-            raise ValueError(
-                f"Input is not an instance of ClingenAgentState, is: {type(input)}"
-            )
-        return ClingenAgentState(
-            sentences=[self.process_sentence(sentence) for sentence in input.sentences]
         )

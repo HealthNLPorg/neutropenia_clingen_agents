@@ -3,15 +3,11 @@ import logging
 import re
 from collections.abc import Collection, Mapping, Sequence
 from functools import partial
-from typing import Any
 
-from langchain_core.runnables import Runnable, RunnableConfig
-from langchain_core.runnables.utils import Input, Output
 from more_itertools import one
 
 from ..utils.serialization import remove_non_printable_characters
 from .state_model import (
-    ClingenAgentState,
     ClinGenMention,
     Document,
     DocumentSection,
@@ -27,7 +23,7 @@ logging.basicConfig(
 )
 
 
-class ValidationAgent(Runnable):
+class ValidationAgent:
     def __init__(
         self, attributes: Collection[str] = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
     ) -> None:
@@ -242,17 +238,5 @@ class ValidationAgent(Runnable):
             ],
         )
 
-    def __call__(self, sentence: Sentence) -> Sentence:
+    def process_sentence(self, sentence: Sentence) -> Sentence:
         return ValidationAgent.parse_sentence(sentence, self.attributes)
-
-    def invoke(self, input: Input, config: RunnableConfig | None = None, **kwargs: Any):
-        if not isinstance(input, ClingenAgentState):
-            raise ValueError(
-                f"Input is not an instance of ClingenAgentState, is: {type(input)}"
-            )
-        return ClingenAgentState(
-            sentences=[
-                ValidationAgent.parse_sentence(sentence, self.attributes)
-                for sentence in input.sentences
-            ]
-        )

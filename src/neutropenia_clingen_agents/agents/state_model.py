@@ -29,10 +29,10 @@ class ClinGenMention(BaseModel):
 # TODO - have this or the general state model implement __concat__
 # so the type checker is OK with having it as an output
 class Sentence(BaseModel):
-    offsets: Final[Offsets]
-    sentence_string: Final[str]
-    raw_output: Final[str | None]
-    mention: Final[ClinGenMention | None]
+    offsets: Offsets
+    sentence_string: str
+    raw_output: str | None
+    mention: ClinGenMention | None
 
 
 class DocumentSection(BaseModel):
