@@ -35,10 +35,6 @@ class ValidationAgent:
             return None
 
     @staticmethod
-    def json_non_empty(sample_json: Mapping[str, Sequence[str]]) -> bool:
-        return len(sample_json) > 0
-
-    @staticmethod
     def select_span(subsample: str, sample: str) -> tuple[int, int] | None:
         spans = [
             re_match.span()
@@ -63,9 +59,9 @@ class ValidationAgent:
 
     @staticmethod
     def select_non_hallucinatory_attribute(
-        attribute_name: str, sample: str, sample_json: Mapping[str, Sequence[str]]
+        attribute_name: str, sample: str, sample_dict: Mapping[str, Sequence[str]]
     ) -> tuple[int, int] | None:
-        attributes = sample_json.get(attribute_name, [])
+        attributes = sample_dict.get(attribute_name, [])
         if isinstance(attributes, str):
             logger.warning(
                 "Mention %s for attribute %s does not follow singleton list schema - checking anyway",
@@ -97,31 +93,35 @@ class ValidationAgent:
             return next(filter(lambda s: s is not None, map(select_span, attributes)))
 
     @staticmethod
-    def build_attribute_validated_json(
+    def build_attribute_validated_dict(
         attributes: Collection[str],
         sample: str,
-        sample_json: Mapping[str, Sequence[str]],
+        sample_dict: Mapping[str, Sequence[str]],
     ) -> Mapping[str, tuple[int, int] | None]:
+        print(sample)
+        print(sample_dict)
         return {
             attribute_name: ValidationAgent.select_non_hallucinatory_attribute(
                 attribute_name=attribute_name,
                 sample=sample,
-                sample_json=sample_json,
+                sample_dict=sample_dict,
             )
             for attribute_name in attributes
         }
 
     @staticmethod
     def get_validated_mention_json(
-        sample: str, attributes: Collection[str]
+        sentence: Sentence, attributes: Collection[str]
     ) -> Mapping[str, tuple[int, int] | None] | None:
-        sample_json = ValidationAgent.parse_json(sample)
-        if sample_json is None:
+        if sentence.raw_output is None:
             return None
-        if not ValidationAgent.json_non_empty(sample_json):
+        sample_dict = ValidationAgent.parse_json(sentence.raw_output)
+        if sample_dict is None or len(sample_dict) == 0:
             return None
-        return ValidationAgent.build_attribute_validated_json(
-            attributes=attributes, sample=sample, sample_json=sample_json
+        return ValidationAgent.build_attribute_validated_dict(
+            attributes=attributes,
+            sample=sentence.sentence_string,
+            sample_dict=sample_dict,
         )
 
     @staticmethod
@@ -162,7 +162,7 @@ class ValidationAgent:
 
     @staticmethod
     def get_clingen_mention(
-        sentence: str, attributes: Collection[str]
+        sentence: Sentence, attributes: Collection[str]
     ) -> ClinGenMention | None:
         validated_mention_json = ValidationAgent.get_validated_mention_json(
             sentence, attributes
@@ -179,11 +179,11 @@ class ValidationAgent:
             vaf_str = (
                 None
                 if vaf_offsets is None
-                else sentence[vaf_offsets[0] : vaf_offsets[1]]
+                else sentence.sentence_string[vaf_offsets[0] : vaf_offsets[1]]
             )
             variant_type = validated_mention_json.get("TYPE")
             return ClinGenMention(
-                source_text=sentence,
+                source_text=sentence.sentence_string,
                 gene=gene,
                 syntax_n=validated_mention_json.get("SYNTAX_N"),
                 syntax_p=validated_mention_json.get("SYNTAX_P"),
@@ -194,14 +194,16 @@ class ValidationAgent:
 
     @staticmethod
     def parse_sentence(sentence: Sentence, attributes: Collection[str]) -> Sentence:
+        if sentence.raw_output is None:
+            raise ValueError("Sentence is missing raw output")
         if sentence.mention is not None:
-            raise ValueError("sentence is already populated with mention")
+            raise ValueError("Sentence is already populated with mention")
         return Sentence(
             offsets=sentence.offsets,
             sentence_string=sentence.sentence_string,
             raw_output=sentence.raw_output,
             mention=ValidationAgent.get_clingen_mention(
-                sentence=sentence.sentence_string,
+                sentence=sentence,
                 attributes=attributes,
             ),
         )

@@ -29,7 +29,6 @@ parser.add_argument("--attributes", nargs="+", default={})
 def build_agent_workflow(
     model_id: str,
     max_new_tokens: int,
-    max_length: int,
     system_prompt: str,
     examples_file: str | None,
     sample_document: str | None,
@@ -40,7 +39,6 @@ def build_agent_workflow(
     mention_agent_node = MentionAgent(
         model_id=model_id,
         max_new_tokens=max_new_tokens,
-        max_length=max_length,
         system_prompt=system_prompt,
         examples_file=examples_file,
         sample_document=sample_document,
@@ -62,7 +60,6 @@ def build_agent_workflow(
 def run_workflow(
     model_id: str,
     max_new_tokens: int,
-    max_length: int,
     prompt_file: str,
     query_tsv: str,
     output_dir: str,
@@ -76,7 +73,6 @@ def run_workflow(
     agent_workflow = build_agent_workflow(
         model_id=model_id,
         max_new_tokens=max_new_tokens,
-        max_length=max_length,
         system_prompt=system_prompt,
         examples_file=examples_file,
         sample_document=sample_document,
@@ -85,16 +81,16 @@ def run_workflow(
     )
     df = pl.read_csv(query_tsv, separator="\t")
     for sentence in df["sentence"]:
-        print(
-            agent_workflow.invoke(
-                Sentence(
-                    offsets=(0, len(sentence)),
-                    sentence_string=sentence,
-                    raw_output=None,
-                    mention=None,
-                )
+        mention = agent_workflow.invoke(
+            Sentence(
+                offsets=(0, len(sentence)),
+                sentence_string=sentence,
+                raw_output=None,
+                mention=None,
             )
-        )
+        ).get("mention")
+        if mention is not None:
+            print(mention)
 
 
 def main() -> None:
@@ -102,7 +98,6 @@ def main() -> None:
     run_workflow(
         model_id=args.model_id,
         max_new_tokens=args.max_new_tokens,
-        max_length=args.max_length,
         prompt_file=args.prompt_file,
         query_tsv=args.query_tsv,
         output_dir=args.output_dir,

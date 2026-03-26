@@ -1,6 +1,5 @@
 import logging
 from collections.abc import Iterable, Sequence
-from functools import partial
 from time import time
 from typing import cast
 
@@ -23,17 +22,17 @@ class MentionAgent:
         self,
         model_id: str,
         max_new_tokens: int,
-        max_length: int,
         system_prompt: str,
         examples_file: str | None,
         sample_document: str | None,
         sample_answer: str | None,
     ) -> None:
-        build_huggingface_prompt = get_huggingface_prompt_builder(
+        self.build_prompt = get_huggingface_prompt_builder(
             examples_file=examples_file,
             sample_document=sample_document,
             sample_answer=sample_answer,
         )
+        self.system_prompt = system_prompt
         start = time()
         self.model_pipeline = pipeline(
             "text-generation",
@@ -45,17 +44,12 @@ class MentionAgent:
         end = time()
         logger.info("Loading model took %d seconds", end - start)
 
-        self.local_build_prompt = partial(build_huggingface_prompt, system_prompt)
-        self.local_apply_chat_template = partial(
-            self.__apply_chat_template, max_length=max_length
-        )
-
     @staticmethod
     def __parse_raw_output(model_output) -> str:
         return model_output[0]["generated_text"].split("assistant")[-1].strip()
 
     def __apply_chat_template(
-        self, prompted_messages: list[dict[str, str]], max_length: int
+        self, prompted_messages: list[list[dict[str, str]]]
     ) -> list[str]:
         if not hasattr(self.model_pipeline.tokenizer, "apply_chat_template"):
             raise NotImplementedError(
@@ -66,7 +60,6 @@ class MentionAgent:
             tokenize=False,
             add_generation_prompt=False,
             truncate=True,
-            max_length=max_length,
         )
         if isinstance(result, list) and all(
             map(lambda elem: isinstance(elem, str), result)
@@ -74,9 +67,15 @@ class MentionAgent:
             return cast(list[str], result)
         raise ValueError(f"Incorrect result type {type(result)}")
 
-    def __format_to_chat_template(self, inputs: Iterable[str]) -> list[str]:
-        prompts = list(map(self.local_build_prompt, inputs))
-        return self.local_apply_chat_template(prompts)
+    def __format_to_chat_template(self, queries: Iterable[str]) -> list[str]:
+        prompts = [
+            [
+                {str(k): str(v) for k, v in message_mapping.items()}
+                for message_mapping in self.build_prompt(self.system_prompt, query)
+            ]
+            for query in queries
+        ]
+        return self.__apply_chat_template(prompts)
 
     def __predict(self, inputs: list[str]) -> Sequence[str]:
         try:
