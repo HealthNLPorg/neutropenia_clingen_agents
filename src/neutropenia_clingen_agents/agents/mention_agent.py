@@ -1,7 +1,6 @@
 import logging
 from collections.abc import Iterable, Sequence
 from functools import partial
-from operator import attrgetter
 from time import time
 from typing import Any, cast
 
@@ -10,7 +9,7 @@ from langchain_core.runnables.utils import Input, Output
 from transformers import pipeline
 
 from ..utils.prompt import get_huggingface_prompt_builder
-from .state_model import Document, DocumentSection, Sentence
+from .state_model import ClingenAgentState, Sentence
 
 logger = logging.getLogger(__name__)
 
@@ -93,43 +92,7 @@ class MentionAgent(Runnable):
     def process_inputs(self, inputs: Iterable[str]) -> Sequence[str]:
         return self.__predict(self.__format_to_chat_template(inputs))
 
-    def __process_section(self, document_section: DocumentSection) -> DocumentSection:
-        if len(document_section.sentences) == 0:
-            section_offsets = document_section.offsets
-            raise ValueError(f"No sentences in section {section_offsets}")
-        if any(
-            sentence.raw_output is not None or sentence.mention is not None
-            for sentence in document_section.sentences
-        ):
-            section_offsets = document_section.offsets
-            raise ValueError(
-                f"One of the sentences in section {section_offsets} is already populated with mentions"
-            )
-        raw_outputs = self.process_inputs(
-            map(attrgetter("sentence_string"), document_section.sentences)
-        )
-        updated_sentences = [
-            Sentence(
-                offsets=sentence.offsets,
-                sentence_string=sentence.sentence_string,
-                raw_output=raw_output,
-                mention=None,
-            )
-            for raw_output, sentence in zip(raw_outputs, document_section.sentences)
-        ]
-        return DocumentSection(
-            section_header=document_section.section_header,
-            offsets=document_section.offsets,
-            sentences=updated_sentences,
-        )
-
-    def __process_document(self, document: Document) -> Document:
-        return Document(
-            file_id=document.file_id,
-            sections=[self.__process_section(section) for section in document.sections],
-        )
-
-    def __call__(self, sentence: Sentence) -> Sentence:
+    def process_sentence(self, sentence: Sentence) -> Sentence:
         return Sentence(
             offsets=sentence.offsets,
             sentence_string=sentence.sentence_string,
@@ -137,14 +100,11 @@ class MentionAgent(Runnable):
             mention=None,
         )
 
-    def invoke(
-        self, input: Input, config: RunnableConfig | None = None, **kwargs: Any
-    ) -> Output:
-        if not isinstance(input, Sentence):
-            raise ValueError(f"Input is not a sentence, is: {type(input)}")
-        return Sentence(
-            offsets=input.offsets,
-            sentence_string=input.sentence_string,
-            raw_output=self.process_inputs([input.sentence_string])[0],
-            mention=None,
+    def invoke(self, input: Input, config: RunnableConfig | None = None, **kwargs: Any):
+        if not isinstance(input, ClingenAgentState):
+            raise ValueError(
+                f"Input is not an instance of ClingenAgentState, is: {type(input)}"
+            )
+        return ClingenAgentState(
+            sentences=[self.process_sentence(sentence) for sentence in input.sentences]
         )

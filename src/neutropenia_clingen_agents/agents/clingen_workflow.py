@@ -5,7 +5,7 @@ import polars as pl
 from langgraph.graph.state import END, CompiledStateGraph, StateGraph
 
 from .mention_agent import MentionAgent
-from .state_model import Sentence
+from .state_model import ClingenAgentState, Sentence
 from .validation_agent import ValidationAgent
 
 parser = argparse.ArgumentParser(description="")
@@ -84,17 +84,16 @@ def run_workflow(
         attributes=attributes,
     )
     df = pl.read_csv(query_tsv, separator="\t")
-    for sentence in df["sentence"]:
-        print(
-            agent_workflow.invoke(
-                Sentence(
-                    offsets=(0, len(sentence)),
-                    sentence_string=sentence,
-                    raw_output=None,
-                    mention=None,
-                )
-            )
+    sentences = [
+        Sentence(
+            offsets=(0, len(sentence)),
+            sentence_string=sentence,
+            raw_output=None,
+            mention=None,
         )
+        for sentence in df["sentence"]
+    ]
+    agent_workflow.invoke(ClingenAgentState(sentences=sentences))
 
 
 def main() -> None:

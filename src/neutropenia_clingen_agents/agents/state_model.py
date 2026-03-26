@@ -46,5 +46,9 @@ class Document(BaseModel):
     sections: Final[Sequence[DocumentSection]]
 
 
+# class ClingenAgentState(BaseModel):
+#     documents: Final[Sequence[Document]]
+
+
 class ClingenAgentState(BaseModel):
-    documents: Final[Sequence[Document]]
+    sentences: list[Sentence] = Field(description="Sentence", default_factory=list)
