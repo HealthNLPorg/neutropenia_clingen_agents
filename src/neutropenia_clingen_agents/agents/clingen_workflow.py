@@ -17,8 +17,16 @@ parser.add_argument(
 )
 parser.add_argument("--max_new_tokens", type=int, default=512)
 parser.add_argument("--max_length", type=int, default=8_000)
-parser.add_argument("--prompt_file", type=str)
-parser.add_argument("--examples_file", type=str)
+parser.add_argument(
+    "--system_prompt_file",
+    type=str,
+    default="./resources/prompts/vtype_fixed.txt",
+)
+parser.add_argument(
+    "--examples_file",
+    type=str,
+    default="./resources/examples/ex12_and_invitae.tsv",
+)
 parser.add_argument("--sample_document", type=str)
 parser.add_argument("--sample_answer", type=str)
 parser.add_argument("--query_tsv", type=str)
@@ -30,13 +38,15 @@ parser.add_argument("--attributes", nargs="+", default=None)
 def build_agent_workflow(
     model_id: str,
     max_new_tokens: int,
-    system_prompt: str,
-    examples_file: str | None,
-    sample_document: str | None,
-    sample_answer: str | None,
+    system_prompt_file: str = "./resources/prompts/vtype_fixed.txt",
+    examples_file: str | None = "./resources/examples/ex12_and_invitae.tsv",
+    sample_document: str | None = None,
+    sample_answer: str | None = None,
     anchor: str | None = None,
     attributes: Collection[str] | None = None,
 ) -> CompiledStateGraph:
+    with open(system_prompt_file) as f:
+        system_prompt = f.read()
     workflow = StateGraph(Sentence)
     mention_agent_node = MentionAgent(
         model_id=model_id,
@@ -62,7 +72,7 @@ def build_agent_workflow(
 def run_workflow(
     model_id: str,
     max_new_tokens: int,
-    prompt_file: str,
+    system_prompt_file: str,
     query_tsv: str,
     output_dir: str,
     examples_file: str | None,
@@ -71,12 +81,10 @@ def run_workflow(
     anchor: str | None,
     attributes: Collection[str] | None,
 ) -> None:
-    with open(prompt_file) as f:
-        system_prompt = f.read()
     agent_workflow = build_agent_workflow(
         model_id=model_id,
         max_new_tokens=max_new_tokens,
-        system_prompt=system_prompt,
+        system_prompt_file=system_prompt_file,
         examples_file=examples_file,
         sample_document=sample_document,
         sample_answer=sample_answer,
@@ -102,7 +110,7 @@ def main() -> None:
     run_workflow(
         model_id=args.model_id,
         max_new_tokens=args.max_new_tokens,
-        prompt_file=args.prompt_file,
+        system_prompt_file=args.system_prompt_file,
         query_tsv=args.query_tsv,
         output_dir=args.output_dir,
         examples_file=args.examples_file,
