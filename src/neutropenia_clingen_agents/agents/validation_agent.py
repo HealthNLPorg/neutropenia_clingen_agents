@@ -4,7 +4,7 @@ import re
 from collections.abc import Collection, Mapping, Sequence
 from functools import partial
 
-from more_itertools import one
+from more_itertools import one, prepend
 
 from ..utils.serialization import remove_non_printable_characters
 from .state_model import (
@@ -23,8 +23,11 @@ logging.basicConfig(
 
 class ValidationAgent:
     def __init__(
-        self, attributes: Collection[str] = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
+        self,
+        anchor: str = "GENE",
+        attributes: Collection[str] = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"},
     ) -> None:
+        self.anchor = anchor
         self.attributes = attributes
 
     @staticmethod
@@ -62,8 +65,6 @@ class ValidationAgent:
         attribute_name: str, sample: str, sample_dict: Mapping[str, Sequence[str]]
     ) -> tuple[int, int] | None:
         attributes = sample_dict.get(attribute_name, [])
-        print(attribute_name)
-        print(attributes)
         if isinstance(attributes, str):
             logger.warning(
                 "Mention %s for attribute %s does not follow singleton list schema - checking anyway",
@@ -96,7 +97,7 @@ class ValidationAgent:
 
     @staticmethod
     def get_validated_mention_json(
-        sentence: Sentence, attributes: Collection[str]
+        sentence: Sentence, anchor: str, attributes: Collection[str]
     ) -> Mapping[str, tuple[int, int] | None] | None:
         if sentence.raw_output is None:
             return None
@@ -104,17 +105,14 @@ class ValidationAgent:
         if sample_dict is None or len(sample_dict) == 0:
             return None
 
-        result = {
+        return {
             attribute_name: ValidationAgent.select_non_hallucinatory_attribute(
                 attribute_name=attribute_name,
                 sample=sentence.sentence_string,
                 sample_dict=sample_dict,
             )
-            for attribute_name in attributes
+            for attribute_name in prepend(anchor, attributes)
         }
-        print(sample_dict)
-        print(result)
-        return result
 
     @staticmethod
     def is_heterozygous(
@@ -155,19 +153,20 @@ class ValidationAgent:
 
     @staticmethod
     def get_clingen_mention(
-        sentence: Sentence, attributes: Collection[str]
+        sentence: Sentence, anchor: str, attributes: Collection[str]
     ) -> ClinGenMention | None:
         validated_mention_json = ValidationAgent.get_validated_mention_json(
-            sentence, attributes
+            sentence=sentence,
+            anchor=anchor,
+            attributes=attributes,
         )
-        print(validated_mention_json)
         if validated_mention_json is None:
             return None
-        gene = validated_mention_json.get("GENE")
-        if gene is not None and any(
+        anchor_value = validated_mention_json.get(anchor)
+        if anchor_value is not None and any(
             validated_mention_json.get(attribute) is not None
             for attribute in attributes
-            if attribute != "GENE"
+            if attribute != anchor
         ):
             vaf_offsets = validated_mention_json.get("VAF")
             vaf_str = (
@@ -178,7 +177,7 @@ class ValidationAgent:
             variant_type = validated_mention_json.get("TYPE")
             return ClinGenMention(
                 source_text=sentence.sentence_string,
-                gene=gene,
+                gene=anchor_value,
                 syntax_n=validated_mention_json.get("SYNTAX_N"),
                 syntax_p=validated_mention_json.get("SYNTAX_P"),
                 vaf=validated_mention_json.get("VAF"),
@@ -187,7 +186,9 @@ class ValidationAgent:
             )
 
     @staticmethod
-    def parse_sentence(sentence: Sentence, attributes: Collection[str]) -> Sentence:
+    def parse_sentence(
+        sentence: Sentence, anchor: str, attributes: Collection[str]
+    ) -> Sentence:
         if sentence.raw_output is None:
             raise ValueError("Sentence is missing raw output")
         if sentence.mention is not None:
@@ -198,9 +199,12 @@ class ValidationAgent:
             raw_output=sentence.raw_output,
             mention=ValidationAgent.get_clingen_mention(
                 sentence=sentence,
+                anchor=anchor,
                 attributes=attributes,
             ),
         )
 
     def process_sentence(self, sentence: Sentence) -> Sentence:
-        return ValidationAgent.parse_sentence(sentence, self.attributes)
+        return ValidationAgent.parse_sentence(
+            sentence=sentence, anchor=self.anchor, attributes=self.attributes
+        )

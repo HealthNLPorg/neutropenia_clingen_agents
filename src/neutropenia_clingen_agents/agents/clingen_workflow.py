@@ -23,6 +23,7 @@ parser.add_argument("--sample_document", type=str)
 parser.add_argument("--sample_answer", type=str)
 parser.add_argument("--query_tsv", type=str)
 parser.add_argument("--output_dir", type=str)
+parser.add_argument("--anchor", type=str, default=None)
 parser.add_argument("--attributes", nargs="+", default=None)
 
 
@@ -33,6 +34,7 @@ def build_agent_workflow(
     examples_file: str | None,
     sample_document: str | None,
     sample_answer: str | None,
+    anchor: str | None,
     attributes: Collection[str] | None,
 ) -> CompiledStateGraph:
     workflow = StateGraph(Sentence)
@@ -46,8 +48,8 @@ def build_agent_workflow(
     )
     workflow.add_node("mention_agent", mention_agent_node.process_sentence)
     validation_agent_node = (
-        ValidationAgent(attributes=attributes)
-        if attributes is not None
+        ValidationAgent(anchor=anchor, attributes=attributes)
+        if attributes is not None and anchor is not None
         else ValidationAgent()
     )
     workflow.add_node("validation_agent", validation_agent_node.process_sentence)
@@ -66,6 +68,7 @@ def run_workflow(
     examples_file: str | None,
     sample_document: str | None,
     sample_answer: str | None,
+    anchor: str | None,
     attributes: Collection[str] | None,
 ) -> None:
     with open(prompt_file) as f:
@@ -77,6 +80,7 @@ def run_workflow(
         examples_file=examples_file,
         sample_document=sample_document,
         sample_answer=sample_answer,
+        anchor=anchor,
         attributes=attributes,
     )
     df = pl.read_csv(query_tsv, separator="\t")
@@ -104,6 +108,7 @@ def main() -> None:
         examples_file=args.examples_file,
         sample_document=args.sample_document,
         sample_answer=args.sample_answer,
+        anchor=args.anchor,
         attributes=args.attributes,
     )
 
