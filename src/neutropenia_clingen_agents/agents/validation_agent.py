@@ -38,7 +38,7 @@ class ValidationAgent:
     def select_span(subsample: str, sample: str) -> tuple[int, int] | None:
         spans = [
             re_match.span()
-            for re_match in re.finditer(subsample.lower(), sample.lower())
+            for re_match in re.finditer(re.escape(subsample.lower()), sample.lower())
         ]
         try:
             return one(spans, too_short=ValueError, too_long=IndexError)
@@ -62,6 +62,8 @@ class ValidationAgent:
         attribute_name: str, sample: str, sample_dict: Mapping[str, Sequence[str]]
     ) -> tuple[int, int] | None:
         attributes = sample_dict.get(attribute_name, [])
+        print(attribute_name)
+        print(attributes)
         if isinstance(attributes, str):
             logger.warning(
                 "Mention %s for attribute %s does not follow singleton list schema - checking anyway",
@@ -93,23 +95,6 @@ class ValidationAgent:
             return next(filter(lambda s: s is not None, map(select_span, attributes)))
 
     @staticmethod
-    def build_attribute_validated_dict(
-        attributes: Collection[str],
-        sample: str,
-        sample_dict: Mapping[str, Sequence[str]],
-    ) -> Mapping[str, tuple[int, int] | None]:
-        print(sample)
-        print(sample_dict)
-        return {
-            attribute_name: ValidationAgent.select_non_hallucinatory_attribute(
-                attribute_name=attribute_name,
-                sample=sample,
-                sample_dict=sample_dict,
-            )
-            for attribute_name in attributes
-        }
-
-    @staticmethod
     def get_validated_mention_json(
         sentence: Sentence, attributes: Collection[str]
     ) -> Mapping[str, tuple[int, int] | None] | None:
@@ -118,15 +103,22 @@ class ValidationAgent:
         sample_dict = ValidationAgent.parse_json(sentence.raw_output)
         if sample_dict is None or len(sample_dict) == 0:
             return None
-        return ValidationAgent.build_attribute_validated_dict(
-            attributes=attributes,
-            sample=sentence.sentence_string,
-            sample_dict=sample_dict,
-        )
+
+        result = {
+            attribute_name: ValidationAgent.select_non_hallucinatory_attribute(
+                attribute_name=attribute_name,
+                sample=sentence.sentence_string,
+                sample_dict=sample_dict,
+            )
+            for attribute_name in attributes
+        }
+        print(sample_dict)
+        print(result)
+        return result
 
     @staticmethod
     def is_heterozygous(
-        vaf: str | None, threshold: int = 50, pattern: str = r"([0-9]{2}(\.[0-9]+)?%)"
+        vaf: str | None, threshold: int = 50, pattern: str = r"([0-9]{1,2}(\.[0-9]+)?%)"
     ) -> bool | None:
         if vaf is None:
             return None
@@ -138,7 +130,8 @@ class ValidationAgent:
             return vaf[first:second]
 
         match_texts = [
-            get_text(re_match) for re_match in re.finditer(pattern=pattern, string=vaf)
+            get_text(re_match)
+            for re_match in re.finditer(pattern=pattern, string=re.escape(vaf))
         ]
         try:
             vaf_percentage = one(
@@ -158,7 +151,7 @@ class ValidationAgent:
                 vaf,
             )
 
-            return max(map(float, match_texts)) > threshold
+            return max(map(lambda m: float(m.rstrip("%")), match_texts)) > threshold
 
     @staticmethod
     def get_clingen_mention(
@@ -167,6 +160,7 @@ class ValidationAgent:
         validated_mention_json = ValidationAgent.get_validated_mention_json(
             sentence, attributes
         )
+        print(validated_mention_json)
         if validated_mention_json is None:
             return None
         gene = validated_mention_json.get("GENE")

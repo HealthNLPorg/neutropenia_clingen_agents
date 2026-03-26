@@ -23,7 +23,7 @@ parser.add_argument("--sample_document", type=str)
 parser.add_argument("--sample_answer", type=str)
 parser.add_argument("--query_tsv", type=str)
 parser.add_argument("--output_dir", type=str)
-parser.add_argument("--attributes", nargs="+", default={})
+parser.add_argument("--attributes", nargs="+", default=None)
 
 
 def build_agent_workflow(
@@ -81,16 +81,16 @@ def run_workflow(
     )
     df = pl.read_csv(query_tsv, separator="\t")
     for sentence in df["sentence"]:
-        mention = agent_workflow.invoke(
-            Sentence(
-                offsets=(0, len(sentence)),
-                sentence_string=sentence,
-                raw_output=None,
-                mention=None,
+        print(
+            agent_workflow.invoke(
+                Sentence(
+                    offsets=(0, len(sentence)),
+                    sentence_string=sentence,
+                    raw_output=None,
+                    mention=None,
+                )
             )
-        ).get("mention")
-        if mention is not None:
-            print(mention)
+        )
 
 
 def main() -> None:
