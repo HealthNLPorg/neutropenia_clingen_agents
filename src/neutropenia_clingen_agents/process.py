@@ -147,7 +147,7 @@ def process(
     )
     query_dataset.to_json(processed_json_out_path)
     try:
-        processed_query_tsv = f"processed_{query_tsv_stem}.tsv"
+        processed_query_tsv = f"true_json_processed_{query_tsv_stem}.tsv"
         processed_tsv_out_path = os.path.join(output_dir, processed_query_tsv)
         query_dataframe = query_dataset.to_polars()
         query_dataframe.write_csv(processed_tsv_out_path, separator="\t")
