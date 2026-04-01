@@ -1,11 +1,16 @@
 import logging
 from collections.abc import Iterable, Sequence
+from functools import partial
 from time import time
 from typing import cast
 
 from transformers import pipeline
 
-from ..utils.prompt import get_huggingface_prompt_builder
+from ..utils.prompt import (
+    few_shot_prompt,
+    get_huggingface_prompt_builder,
+    zero_shot_prompt,
+)
 from .state_model import Sentence
 
 logger = logging.getLogger(__name__)
@@ -23,15 +28,22 @@ class MentionAgent:
         model_id: str,
         max_new_tokens: int,
         system_prompt: str,
-        examples_file: str | None,
-        sample_document: str | None,
-        sample_answer: str | None,
+        examples_file: str | None = None,
+        examples: Sequence[tuple[str, str]] | None = None,
+        sample_document: str | None = None,
+        sample_answer: str | None = None,
     ) -> None:
-        self.build_prompt = get_huggingface_prompt_builder(
-            examples_file=examples_file,
-            sample_document=sample_document,
-            sample_answer=sample_answer,
-        )
+        if examples_file is not None and examples is None:
+            self.build_prompt = get_huggingface_prompt_builder(
+                examples_file=examples_file,
+                sample_document=sample_document,
+                sample_answer=sample_answer,
+            )
+        elif examples_file is None and examples is not None:
+            self.build_prompt = partial(few_shot_prompt, examples=examples)
+        else:
+            logger.info("No examples or examples file provided, using zero shot")
+            self.build_prompt = zero_shot_prompt
         self.system_prompt = system_prompt
         start = time()
         self.model_pipeline = pipeline(

@@ -17,16 +17,8 @@ parser.add_argument(
 )
 parser.add_argument("--max_new_tokens", type=int, default=512)
 parser.add_argument("--max_length", type=int, default=8_000)
-parser.add_argument(
-    "--system_prompt_file",
-    type=str,
-    default="./resources/prompts/vtype_fixed.txt",
-)
-parser.add_argument(
-    "--examples_file",
-    type=str,
-    default="./resources/examples/ex12_and_invitae.tsv",
-)
+parser.add_argument("--prompt_file", type=str)
+parser.add_argument("--examples_file", type=str)
 parser.add_argument("--sample_document", type=str)
 parser.add_argument("--sample_answer", type=str)
 parser.add_argument("--query_tsv", type=str)
@@ -35,24 +27,43 @@ parser.add_argument("--anchor", type=str, default=None)
 parser.add_argument("--attributes", nargs="+", default=None)
 
 
+def quickstart() -> CompiledStateGraph:
+    workflow = StateGraph(Sentence)
+    from .resources.examples.default import examples
+    from .resources.prompts.vtype_fixed import prompt
+
+    mention_agent_node = MentionAgent(
+        model_id="unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit",
+        max_new_tokens=512,
+        system_prompt=prompt,
+        examples=examples,
+    )
+    workflow.add_node("mention_agent", mention_agent_node.process_sentence)
+    validation_agent_node = ValidationAgent()
+    workflow.add_node("validation_agent", validation_agent_node.process_sentence)
+    workflow.set_entry_point("mention_agent")
+    workflow.add_edge("mention_agent", "validation_agent")
+    workflow.add_edge("validation_agent", END)
+    return workflow.compile()
+
+
 def build_agent_workflow(
     model_id: str,
     max_new_tokens: int,
-    system_prompt_file: str = "./resources/prompts/vtype_fixed.txt",
-    examples_file: str | None = "./resources/examples/ex12_and_invitae.tsv",
-    sample_document: str | None = None,
-    sample_answer: str | None = None,
-    anchor: str | None = None,
-    attributes: Collection[str] | None = None,
+    system_prompt: str,
+    examples_file: str | None,
+    sample_document: str | None,
+    sample_answer: str | None,
+    anchor: str | None,
+    attributes: Collection[str] | None,
 ) -> CompiledStateGraph:
-    with open(system_prompt_file) as f:
-        system_prompt = f.read()
     workflow = StateGraph(Sentence)
     mention_agent_node = MentionAgent(
         model_id=model_id,
         max_new_tokens=max_new_tokens,
         system_prompt=system_prompt,
         examples_file=examples_file,
+        examples=None,
         sample_document=sample_document,
         sample_answer=sample_answer,
     )
@@ -72,19 +83,20 @@ def build_agent_workflow(
 def run_workflow(
     model_id: str,
     max_new_tokens: int,
-    system_prompt_file: str,
+    prompt_file: str,
     query_tsv: str,
-    output_dir: str,
     examples_file: str | None,
     sample_document: str | None,
     sample_answer: str | None,
     anchor: str | None,
     attributes: Collection[str] | None,
 ) -> None:
+    with open(prompt_file) as f:
+        system_prompt = f.read()
     agent_workflow = build_agent_workflow(
         model_id=model_id,
         max_new_tokens=max_new_tokens,
-        system_prompt_file=system_prompt_file,
+        system_prompt=system_prompt,
         examples_file=examples_file,
         sample_document=sample_document,
         sample_answer=sample_answer,
@@ -110,9 +122,8 @@ def main() -> None:
     run_workflow(
         model_id=args.model_id,
         max_new_tokens=args.max_new_tokens,
-        system_prompt_file=args.system_prompt_file,
+        prompt_file=args.prompt_file,
         query_tsv=args.query_tsv,
-        output_dir=args.output_dir,
         examples_file=args.examples_file,
         sample_document=args.sample_document,
         sample_answer=args.sample_answer,
