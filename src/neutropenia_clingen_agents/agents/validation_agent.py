@@ -1,0 +1,210 @@
+import json
+import logging
+import re
+from collections.abc import Collection, Mapping, Sequence
+from functools import partial
+
+from more_itertools import one, prepend
+
+from ..utils.serialization import remove_non_printable_characters
+from .state_model import (
+    ClinGenMention,
+    Sentence,
+)
+
+logger = logging.getLogger(__name__)
+
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+    level=logging.INFO,
+)
+
+
+class ValidationAgent:
+    def __init__(
+        self,
+        anchor: str = "GENE",
+        attributes: Collection[str] = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"},
+    ) -> None:
+        self.anchor = anchor
+        self.attributes = attributes
+
+    @staticmethod
+    def parse_json(sample: str) -> Mapping[str, Sequence[str]] | None:
+        try:
+            return json.loads(sample)
+        except Exception:
+            return None
+
+    @staticmethod
+    def select_span(subsample: str, sample: str) -> tuple[int, int] | None:
+        spans = [
+            re_match.span()
+            for re_match in re.finditer(re.escape(subsample.lower()), sample.lower())
+        ]
+        try:
+            return one(spans, too_short=ValueError, too_long=IndexError)
+        except ValueError:
+            logger.warning(
+                "No instances of %s found in %s, presumed hallucinatory",
+                subsample,
+                sample,
+            )
+            return None
+        except IndexError:
+            logger.warning(
+                "Multiple instances of %s found in %s, returning first",
+                subsample,
+                sample,
+            )
+            return spans[0]
+
+    @staticmethod
+    def select_non_hallucinatory_attribute(
+        attribute_name: str, sample: str, sample_dict: Mapping[str, Sequence[str]]
+    ) -> tuple[int, int] | None:
+        attributes = sample_dict.get(attribute_name, [])
+        if isinstance(attributes, str):
+            logger.warning(
+                "Mention %s for attribute %s does not follow singleton list schema - checking anyway",
+                attributes,
+                attribute_name,
+            )
+            return ValidationAgent.select_span(attributes, sample)
+        if not isinstance(attributes, list) and not all(
+            isinstance(attribute, str) for attribute in attributes
+        ):
+            logger.warning(
+                "Malformed mention %s for attribute %s", attributes, attribute_name
+            )
+            return None
+        try:
+            single_attribute = one(
+                attributes, too_short=IndexError, too_long=ValueError
+            )
+            return ValidationAgent.select_span(single_attribute, sample)
+        except IndexError:
+            return None
+        except ValueError:
+            logger.warning(
+                "Mention for attribute %s does not follow singleton list schema - has %d elements - selecting first element which is valid",
+                attribute_name,
+                len(attributes),
+            )
+            select_span = partial(ValidationAgent.select_span, sample=sample)
+            return next(filter(lambda s: s is not None, map(select_span, attributes)))
+
+    @staticmethod
+    def get_validated_mention_json(
+        sentence: Sentence, anchor: str, attributes: Collection[str]
+    ) -> Mapping[str, tuple[int, int] | None] | None:
+        if sentence.raw_output is None:
+            return None
+        sample_dict = ValidationAgent.parse_json(sentence.raw_output)
+        if sample_dict is None or len(sample_dict) == 0:
+            return None
+
+        return {
+            attribute_name: ValidationAgent.select_non_hallucinatory_attribute(
+                attribute_name=attribute_name,
+                sample=sentence.sentence_string,
+                sample_dict=sample_dict,
+            )
+            for attribute_name in prepend(anchor, attributes)
+        }
+
+    @staticmethod
+    def is_heterozygous(
+        vaf: str | None, threshold: int = 50, pattern: str = r"([0-9]{1,2}(\.[0-9]+)?%)"
+    ) -> bool | None:
+        if vaf is None:
+            return None
+        if remove_non_printable_characters(vaf.strip()).lower() == "heterozygous":
+            return True
+
+        def get_text(re_match: re.Match) -> str:
+            first, second = re_match.span()
+            return vaf[first:second]
+
+        match_texts = [
+            get_text(re_match)
+            for re_match in re.finditer(pattern=pattern, string=re.escape(vaf))
+        ]
+        try:
+            vaf_percentage = one(
+                match_texts,
+                too_short=ValueError,
+                too_long=IndexError,
+            )
+            return float(vaf_percentage.rstrip("%")) > threshold
+        except ValueError:
+            logger.warning(
+                "No percentage formatted strings found in VAF finding: %s", vaf
+            )
+            return None
+        except IndexError:
+            logger.warning(
+                "More than one percentage formatted strings found in VAF finding, returning maximum: %s",
+                vaf,
+            )
+
+            return max(map(lambda m: float(m.rstrip("%")), match_texts)) > threshold
+
+    @staticmethod
+    def get_clingen_mention(
+        sentence: Sentence, anchor: str, attributes: Collection[str]
+    ) -> ClinGenMention | None:
+        validated_mention_json = ValidationAgent.get_validated_mention_json(
+            sentence=sentence,
+            anchor=anchor,
+            attributes=attributes,
+        )
+        if validated_mention_json is None:
+            return None
+        anchor_value = validated_mention_json.get(anchor)
+        if anchor_value is not None and any(
+            validated_mention_json.get(attribute) is not None
+            for attribute in attributes
+            if attribute != anchor
+        ):
+            vaf_offsets = validated_mention_json.get("VAF")
+            vaf_str = (
+                None
+                if vaf_offsets is None
+                else sentence.sentence_string[vaf_offsets[0] : vaf_offsets[1]]
+            )
+            variant_type = validated_mention_json.get("TYPE")
+            return ClinGenMention(
+                source_text=sentence.sentence_string,
+                gene=anchor_value,
+                syntax_n=validated_mention_json.get("SYNTAX_N"),
+                syntax_p=validated_mention_json.get("SYNTAX_P"),
+                vaf=validated_mention_json.get("VAF"),
+                variant_type=variant_type,
+                heterozygous=ValidationAgent.is_heterozygous(vaf_str),
+            )
+
+    @staticmethod
+    def parse_sentence(
+        sentence: Sentence, anchor: str, attributes: Collection[str]
+    ) -> Sentence:
+        if sentence.raw_output is None:
+            raise ValueError("Sentence is missing raw output")
+        if sentence.mention is not None:
+            raise ValueError("Sentence is already populated with mention")
+        return Sentence(
+            offsets=sentence.offsets,
+            sentence_string=sentence.sentence_string,
+            raw_output=sentence.raw_output,
+            mention=ValidationAgent.get_clingen_mention(
+                sentence=sentence,
+                anchor=anchor,
+                attributes=attributes,
+            ),
+        )
+
+    def process_sentence(self, sentence: Sentence) -> Sentence:
+        return ValidationAgent.parse_sentence(
+            sentence=sentence, anchor=self.anchor, attributes=self.attributes
+        )
