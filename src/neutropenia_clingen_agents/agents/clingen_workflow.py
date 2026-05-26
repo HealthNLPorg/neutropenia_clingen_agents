@@ -6,7 +6,6 @@ from langgraph.graph.state import END, CompiledStateGraph, StateGraph
 
 from .mention_agent import MentionAgent
 from .state_model import Sentence
-from .validation_agent import ValidationAgent
 
 parser = argparse.ArgumentParser(description="")
 
@@ -39,11 +38,8 @@ def quickstart() -> CompiledStateGraph:
         examples=examples,
     )
     workflow.add_node("mention_agent", mention_agent_node.process_sentence)
-    validation_agent_node = ValidationAgent()
-    workflow.add_node("validation_agent", validation_agent_node.process_sentence)
     workflow.set_entry_point("mention_agent")
-    workflow.add_edge("mention_agent", "validation_agent")
-    workflow.add_edge("validation_agent", END)
+    workflow.add_edge("mention_agent", END)
     return workflow.compile()
 
 
@@ -68,15 +64,8 @@ def build_agent_workflow(
         sample_answer=sample_answer,
     )
     workflow.add_node("mention_agent", mention_agent_node.process_sentence)
-    validation_agent_node = (
-        ValidationAgent(anchor=anchor, attributes=attributes)
-        if attributes is not None and anchor is not None
-        else ValidationAgent()
-    )
-    workflow.add_node("validation_agent", validation_agent_node.process_sentence)
     workflow.set_entry_point("mention_agent")
-    workflow.add_edge("mention_agent", "validation_agent")
-    workflow.add_edge("validation_agent", END)
+    workflow.add_edge("mention_agent", END)
     return workflow.compile()
 
 

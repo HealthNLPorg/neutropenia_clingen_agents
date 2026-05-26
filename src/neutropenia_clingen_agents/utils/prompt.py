@@ -97,14 +97,12 @@ def get_examples(examples_file_path: str) -> list[tuple[str, str]]:
 
 def parse_input_output(examples_file_path: str) -> list[tuple[str, str]]:
     def parse_example(raw_example: str) -> tuple[str, str]:
-        result = tuple(
+        _input, _output = (
             elem.strip()
             for elem in re.split("input:|output:", raw_example)
             if len(elem.strip()) > 0
         )
-        if len(result) != 2 or not all(isinstance(elem, str) for elem in result):
-            raise ValueError(f"Wrong number of example components {result}")
-        return result
+        return _input, _output
 
     with open(examples_file_path, encoding="utf-8") as ef:
         raw_str = ef.read()
