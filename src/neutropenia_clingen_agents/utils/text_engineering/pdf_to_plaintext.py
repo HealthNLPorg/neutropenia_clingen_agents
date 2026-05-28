@@ -13,7 +13,6 @@ argparser.add_argument("--input_dir", type=str)
 argparser.add_argument("--output_dir", type=str)
 argparser.add_argument("--already_processed", type=str)
 argparser.add_argument("--timeout_cases", type=str)
-argparser.add_argument("--timeout_cases", type=str)
 argparser.add_argument("--output_extension", type=str, default=".txt")
 argparser.add_argument("--tika_timeout", type=int, default=120)
 
