@@ -95,20 +95,19 @@ def ocr_used(parse_result: TikaParse) -> bool:
 def parse_pdf(fn: str, timeout: int, timeout_cases: str | None) -> TikaParse | None:
     headers = {
         "X-Tika-OCRLanguage": "eng",
-        # "X-Tika-PDFextractInlineImages": "true",
     }
-    logger.info(f"processing {fn}")
+    logger.info(f"Processing {fn}")
     try:
         parsed_pdf = parser.from_file(
             fn, requestOptions={"headers": headers, "timeout": timeout}
         )
     except Exception:
-        logger.info(f"{fn} timed out")
+        logger.warning(f"{fn} timed out")
         if timeout_cases is not None:
             with open(timeout_cases, mode="at") as timeout_f:
                 timeout_f.write(f"{fn}\n")
         return None
-    logger.info(f"processed {fn}")
+    logger.info(f"Processed {fn}")
     return parsed_pdf
 
 

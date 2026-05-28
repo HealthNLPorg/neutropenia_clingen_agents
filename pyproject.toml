@@ -22,8 +22,9 @@ dependencies = ["transformers[torch]",
 "ruff",
 "ty",
 "langgraph",
-"fastapi",
-"uvicorn[standard]"
+"tika",
+"attrs",
+"cattrs"
 ]
 
 [tool.setuptools.packages.find]
