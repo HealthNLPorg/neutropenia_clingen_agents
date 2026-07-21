@@ -9,13 +9,13 @@ dynamic = ["version"]
 authors = [
     { name = "Health NLP Lab @ CHIP" },
 ]
-description = "LangGraph based encapsulation of Neutropenia clinical genomics extraction agents."
+description = "Two stage huggingface"
 readme = "README.md"
-requires-python = ">=3.10, <3.11"
+requires-python = ">=3.12, <3.13"
 dependencies = ["transformers[torch]",
 "datasets",
 "accelerate",
-'bitsandbytes ; platform_system != "Darwin"',
+"bitsandbytes",
 "polars",
 "pandas", # Until Huggingface integrates polars and lets you do column selection that way
 "datetime",
@@ -24,13 +24,11 @@ dependencies = ["transformers[torch]",
 "ruff",
 "ty",
 "langchain-huggingface",
-"pydantic",
-"protobuf"
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["langgraph_tutorial_workthrough*"]
+include = ["neutropenia_clingen_agents*"]
 
 [dependency-groups]
 lint = [
@@ -47,8 +45,6 @@ dev = [
     "pre-commit",
 ]
 
-[project.scripts]
-"langgraph_tutorial_workthrough" = "langgraph_tutorial_workthrough.lesson_1:main"
 
 [tool.ruff]
 target-version = "py313"
