@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import os
 import pathlib
@@ -67,9 +68,10 @@ logging.basicConfig(
 
 
 def parse_raw_output(sample: dict) -> dict:
-    sample["raw_output"] = (
+    sample["raw_output"] = json.dumps(
         sample["output"][0]["generated_text"].split("assistant")[-1].strip()
     )
+    sample["output"] = str(sample["output"])
     return sample
 
 
@@ -110,7 +112,9 @@ def process(
         "text-generation",
         model=model_id,
         device_map="auto",
-        max_new_tokens=max_new_tokens,
+        # Literally anything to shut them up
+        token=os.environ["HF_TOKEN"],
+        # quantization_config=BitsAndBytesConfig(load_in_4bit=True)
     )
 
     end = time()
@@ -118,13 +122,16 @@ def process(
 
     local_build_prompt = partial(build_huggingface_prompt, system_prompt)
 
-    def __apply_chat_template(prompt: str) -> str:
+    def __apply_chat_template(prompt: list[dict[str, str]]) -> str:
+        if getattr(seqgen_pipe, "tokenizer", None) is None or getattr(seqgen_pipe.tokenizer, "apply_chat_template"):
+            raise ValueError("No tokenizer for pipeline")
         return seqgen_pipe.tokenizer.apply_chat_template(
             prompt,
             tokenize=False,
             add_generation_prompt=False,
             truncate=True,
-            max_length=max_length,
+            # Technically the same as max_new_tokens, was only kept for backwards compatibility # max_length=max_length,
+            max_new_tokens=max_new_tokens,
         )
 
     def format_to_chat_template(sample: dict) -> dict:
@@ -152,6 +159,8 @@ def process(
         query_dataframe = query_dataset.to_polars()
         query_dataframe.write_csv(processed_tsv_out_path, separator="\t")
     except Exception as e:
+        print(query_dataframe)
+        print(query_dataset)
         logger.error(f"{e} - still having issues with polars output")
     if post_process:
         post_processed_tsv_query_tsv = f"post_processed_{query_tsv_stem}.tsv"
