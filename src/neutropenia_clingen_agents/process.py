@@ -8,7 +8,11 @@ from functools import partial
 from time import time
 
 from datasets import load_dataset
-from transformers import pipeline
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    pipeline,
+)
 
 from .post_process import post_process_dataset
 from .utils.filesystem import make_directory
@@ -108,13 +112,16 @@ def process(
         examples_file, sample_document, sample_answer
     )
     start = time()
+    model = AutoModelForCausalLM.from_pretrained(model_id)
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
     seqgen_pipe = pipeline(
         "text-generation",
-        model=model_id,
-        device_map="auto",
+        model=model,
+        tokenizer=tokenizer,
+        # device_map="auto",
         # Literally anything to shut them up
         token=os.environ["HF_TOKEN"],
-        # quantization_config=BitsAndBytesConfig(load_in_4bit=True)
+        # quantization_config=BitsAndBytesConfig(load_in_4bit=True),
     )
 
     end = time()
@@ -123,8 +130,8 @@ def process(
     local_build_prompt = partial(build_huggingface_prompt, system_prompt)
 
     def __apply_chat_template(prompt: list[dict[str, str]]) -> str:
-        if getattr(seqgen_pipe, "tokenizer", None) is None or getattr(seqgen_pipe.tokenizer, "apply_chat_template"):
-            raise ValueError("No tokenizer for pipeline")
+        #         if getattr(seqgen_pipe, "tokenizer", None) is None or getattr(seqgen_pipe.tokenizer, "apply_chat_template"):
+        #             raise ValueError("No tokenizer for pipeline")
         return seqgen_pipe.tokenizer.apply_chat_template(
             prompt,
             tokenize=False,
@@ -153,15 +160,10 @@ def process(
         .map(parse_raw_output)
     )
     query_dataset.to_json(processed_json_out_path)
-    try:
-        processed_query_tsv = f"true_json_processed_{query_tsv_stem}.tsv"
-        processed_tsv_out_path = os.path.join(output_dir, processed_query_tsv)
-        query_dataframe = query_dataset.to_polars()
-        query_dataframe.write_csv(processed_tsv_out_path, separator="\t")
-    except Exception as e:
-        print(query_dataframe)
-        print(query_dataset)
-        logger.error(f"{e} - still having issues with polars output")
+    processed_query_tsv = f"true_json_processed_{query_tsv_stem}.tsv"
+    processed_tsv_out_path = os.path.join(output_dir, processed_query_tsv)
+    query_dataframe = query_dataset.to_polars()
+    query_dataframe.write_csv(processed_tsv_out_path, separator="\t")
     if post_process:
         post_processed_tsv_query_tsv = f"post_processed_{query_tsv_stem}.tsv"
         post_processed_tsv_out_path = os.path.join(
