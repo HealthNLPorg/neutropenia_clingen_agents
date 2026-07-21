@@ -3,9 +3,10 @@ import json
 import logging
 import os
 import pathlib
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, MutableMapping
 from functools import partial
 from time import time
+from typing import Any, cast
 
 from datasets import load_dataset
 from transformers import (
@@ -26,11 +27,6 @@ parser.add_argument(
 parser.add_argument(
     "--sample_document",
     type=str,
-)
-parser.add_argument(
-    "--max_length",
-    type=int,
-    default=8_000,
 )
 parser.add_argument(
     "--sample_answer",
@@ -71,7 +67,7 @@ logging.basicConfig(
 )
 
 
-def parse_raw_output(sample: dict) -> dict:
+def parse_raw_output(sample: MutableMapping[str, Any]) -> Mapping[str, Any]:
     sample["raw_output"] = json.dumps(
         sample["output"][0]["generated_text"].split("assistant")[-1].strip()
     )
@@ -88,7 +84,6 @@ def process(
     sample_answer: str,
     prompt_file: str,
     max_new_tokens: int,
-    max_length: int,
     batch_size: int,
     post_process: bool,
 ) -> None:
@@ -102,8 +97,6 @@ def process(
 
     make_directory(output_dir)
     query_tsv_stem = pathlib.Path(query_tsv).stem
-    processed_query_json = f"processed_{query_tsv_stem}.json"
-    processed_json_out_path = os.path.join(output_dir, processed_query_json)
 
     with open(prompt_file, encoding="utf-8") as f:
         system_prompt = f.read()
@@ -114,14 +107,17 @@ def process(
     start = time()
     model = AutoModelForCausalLM.from_pretrained(model_id)
     tokenizer = AutoTokenizer.from_pretrained(model_id)
+    if tokenizer is None:
+        raise ValueError(f"Could not load tokenizer for {model_id}")
+    # device_map="auto" problematic on E3 - as of July 2026
+    # the Auto...from_pretrained... then pipeline(...) with no config
+    # seems to be the best idiom for E3
     seqgen_pipe = pipeline(
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        # device_map="auto",
-        # Literally anything to shut them up
+        # HF increasingly pushing this
         token=os.environ["HF_TOKEN"],
-        # quantization_config=BitsAndBytesConfig(load_in_4bit=True),
     )
 
     end = time()
@@ -130,23 +126,30 @@ def process(
     local_build_prompt = partial(build_huggingface_prompt, system_prompt)
 
     def __apply_chat_template(prompt: list[dict[str, str]]) -> str:
-        #         if getattr(seqgen_pipe, "tokenizer", None) is None or getattr(seqgen_pipe.tokenizer, "apply_chat_template"):
-        #             raise ValueError("No tokenizer for pipeline")
-        return seqgen_pipe.tokenizer.apply_chat_template(
-            prompt,
-            tokenize=False,
-            add_generation_prompt=False,
-            truncate=True,
-            # Technically the same as max_new_tokens, was only kept for backwards compatibility # max_length=max_length,
-            max_new_tokens=max_new_tokens,
-        )
+        try:
+            return cast(
+                str,
+                # seqgen_pipe.tokenizer.apply_chat_template(
+                tokenizer.apply_chat_template(
+                    prompt,
+                    tokenize=False,
+                    add_generation_prompt=False,
+                    truncate=True,
+                    # max_new_tokens is the new kwarg for max_length
+                    max_new_tokens=max_new_tokens,
+                ),
+            )
+        except Exception as e:
+            raise ValueError(f"Ran into {e}")
 
-    def format_to_chat_template(sample: dict) -> dict:
+    def format_to_chat_template(
+        sample: MutableMapping[str, Any],
+    ) -> MutableMapping[str, Any]:
         prompts = map(local_build_prompt, sample["sentence"])
         sample["text"] = [__apply_chat_template(prompt) for prompt in prompts]
         return sample
 
-    def predict(sample: dict) -> dict:
+    def predict(sample: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
         try:
             sample["output"] = seqgen_pipe(sample["text"])
         except Exception:
@@ -154,22 +157,24 @@ def process(
             logger.warning(sample)
         return sample
 
-    query_dataset = (
+    processed_query_dataset = (
         query_dataset.map(format_to_chat_template, batched=True, batch_size=batch_size)
         .map(predict, batched=True, batch_size=batch_size)
         .map(parse_raw_output)
     )
-    query_dataset.to_json(processed_json_out_path)
-    processed_query_tsv = f"true_json_processed_{query_tsv_stem}.tsv"
+    # processed_query_json = f"processed_{query_tsv_stem}.json"
+    # processed_json_out_path = os.path.join(output_dir, processed_query_json)
+    # processed_query_dataset.to_json(processed_json_out_path)
+    processed_query_tsv = f"processed_{query_tsv_stem}.tsv"
     processed_tsv_out_path = os.path.join(output_dir, processed_query_tsv)
-    query_dataframe = query_dataset.to_polars()
+    query_dataframe = processed_query_dataset.to_polars()
     query_dataframe.write_csv(processed_tsv_out_path, separator="\t")
     if post_process:
         post_processed_tsv_query_tsv = f"post_processed_{query_tsv_stem}.tsv"
         post_processed_tsv_out_path = os.path.join(
             output_dir, post_processed_tsv_query_tsv
         )
-        post_process_dataset(query_dataset, post_processed_tsv_out_path)
+        post_process_dataset(processed_query_dataset, post_processed_tsv_out_path)
 
 
 def main() -> None:
@@ -183,7 +188,6 @@ def main() -> None:
         sample_answer=args.sample_answer,
         prompt_file=args.prompt_file,
         max_new_tokens=args.max_new_tokens,
-        max_length=args.max_length,
         batch_size=args.batch_size,
         post_process=args.post_process,
     )
