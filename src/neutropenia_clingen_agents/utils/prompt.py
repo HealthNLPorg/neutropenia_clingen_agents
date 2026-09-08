@@ -87,13 +87,11 @@ def get_examples(examples_file_path: str) -> list[tuple[str, str]]:
             )
             queries = (reinsert_whitespace(query) for query in raw_queries)
             responses = cast(Iterable[str], full_dataframe["response"])
-            examples = list(zip(queries, responses))
+            return list(zip(queries, responses))
         case ".txt" | "":
-            examples = parse_input_output(examples_file_path)
+            return parse_input_output(examples_file_path)
         case _:
             raise ValueError(f"Presently unsupported examples file format {suffix}")
-            examples = []
-    return examples
 
 
 def parse_input_output(examples_file_path: str) -> list[tuple[str, str]]:
