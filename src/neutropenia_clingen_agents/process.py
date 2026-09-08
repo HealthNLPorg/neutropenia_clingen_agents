@@ -174,7 +174,9 @@ def process(
         post_processed_tsv_out_path = os.path.join(
             output_dir, post_processed_tsv_query_tsv
         )
-        post_process_dataset(processed_query_dataset, post_processed_tsv_out_path)
+        post_process_dataset(
+            processed_query_dataset, post_processed_tsv_out_path, filter_empties=False
+        )
 
 
 def main() -> None:

@@ -3,8 +3,11 @@ import json
 import logging
 import os
 import pathlib
+from typing import cast
 
-from datasets import Dataset, load_dataset
+import polars as pl
+from datasets import load_dataset
+from datasets.dataset_dict import DatasetDict
 
 from .utils.filesystem import make_directory
 
@@ -16,6 +19,7 @@ parser.add_argument(
 )
 
 parser.add_argument("--output_dir", type=str)
+parser.add_argument("--filter_empties", action="store_true")
 logger = logging.getLogger(__name__)
 
 logging.basicConfig(
@@ -30,6 +34,7 @@ ATTRIBUTES = {"VAF", "SYNTAX_N", "SYNTAX_P", "TYPE"}
 def post_process_from_tsv(
     processed_tsv: str,
     output_dir: str,
+    filter_empties: bool,
 ) -> None:
     processed_dataset = load_dataset(
         "csv",
@@ -40,17 +45,21 @@ def post_process_from_tsv(
     query_tsv_stem = pathlib.Path(processed_tsv).stem
     post_processed_tsv_query_tsv = f"post_processed_{query_tsv_stem}.tsv"
     post_processed_tsv_out_path = os.path.join(output_dir, post_processed_tsv_query_tsv)
-    post_process_dataset(processed_dataset, post_processed_tsv_out_path)
+    post_process_dataset(processed_dataset, post_processed_tsv_out_path, filter_empties)
 
 
-def post_process_dataset(processed_dataset: Dataset, tsv_out_path: str) -> None:
+def post_process_dataset(
+    processed_dataset: DatasetDict, tsv_out_path: str, filter_empties: bool
+) -> None:
     processed_dataset = (
-        processed_dataset.map(parse_output)
-        .map(insert_mentions)
-        .map(clean_section)
-        .remove_columns(["text", "output", "json_output", "raw_output"])
+        processed_dataset.map(parse_output).map(insert_mentions).map(clean_section)
     )
-    processed_dataframe = processed_dataset.to_polars()
+    if filter_empties:
+        processed_dataset = processed_dataset.filter(filter_empty_mentions)
+
+    processed_dataset = processed_dataset.remove_columns(["json_output", "raw_output"])
+
+    processed_dataframe = cast(pl.DataFrame, processed_dataset["train"].to_polars())
     renamed_column_mapping = {col: col.title() for col in processed_dataframe.columns}
     processed_dataframe = processed_dataframe.rename(mapping=renamed_column_mapping)
     processed_dataframe = processed_dataframe[
@@ -59,8 +68,8 @@ def post_process_dataset(processed_dataset: Dataset, tsv_out_path: str) -> None:
             *sorted(map(str.title, ATTRIBUTES)),
             "Sentence",
             "Section",
-            "Specimen_Collection_Date",
-            "Sample_Source",
+            # "Specimen_Collection_Date",
+            # "Sample_Source",
             "Filename",
         ]
     ]
@@ -111,10 +120,15 @@ def insert_mentions(sample: dict) -> dict:
         components_dict = {}
     mention_components = {"GENE", *ATTRIBUTES}
     for mention_component in mention_components:
-        sample[mention_component] = "".join(
-            map(str, components_dict.get(mention_component, ["__UNK__"]))
+        mention_str = components_dict.get(mention_component)
+        sample[mention_component] = (
+            None if mention_str is None else "".join(map(str, mention_str))
         )
     return sample
+
+
+def filter_empty_mentions(sample: dict) -> bool:
+    return any(sample.get(component) is not None for component in {"GENE", *ATTRIBUTES})
 
 
 def attributes_non_empty(sample: dict, attributes: set[str] = ATTRIBUTES) -> bool:
@@ -126,6 +140,7 @@ def main() -> None:
     post_process_from_tsv(
         args.processed_tsv,
         args.output_dir,
+        args.filter_empties,
     )
 
 
