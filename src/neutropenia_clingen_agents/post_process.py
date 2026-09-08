@@ -1,9 +1,10 @@
 import argparse
+import ast
 import json
 import logging
 import os
 import pathlib
-from typing import cast
+from typing import Any, cast
 
 import polars as pl
 from datasets import load_dataset
@@ -88,17 +89,14 @@ def non_empty_json(sample: dict) -> bool:
 
 
 def parse_output(sample: dict) -> dict:
-    sample["json_output"] = json.dumps(try_json(sample["raw_output"]))
+    sample["json_output"] = json.dumps(try_json(ast.literal_eval(sample["raw_output"])))
     return sample
 
 
 def gene_non_hallucinatory(sample: dict) -> bool:
-    try:
-        gene = json.loads(sample["json_output"]).get("GENE")
-        return gene is not None and "".join(gene).lower() in sample["sentence"].lower()
-    except Exception:
-        logger.warning(f"Issue with JSON sample {sample['json_output']}")
-        return False
+    json_loaded = json.loads(sample["json_output"])
+    gene = json_loaded.get("GENE")
+    return gene is not None and "".join(gene).lower() in sample["sentence"].lower()
 
 
 def clean_section(sample: dict) -> dict:
@@ -127,8 +125,14 @@ def insert_mentions(sample: dict) -> dict:
     return sample
 
 
+def non_empty(var: Any) -> bool:
+    return var is not None and var != ""
+
+
 def filter_empty_mentions(sample: dict) -> bool:
-    return any(sample.get(component) is not None for component in {"GENE", *ATTRIBUTES})
+    return non_empty(sample.get("GENE")) and any(
+        non_empty(sample.get(component)) for component in ATTRIBUTES
+    )
 
 
 def attributes_non_empty(sample: dict, attributes: set[str] = ATTRIBUTES) -> bool:
